@@ -7,10 +7,10 @@ class WatchController {
       MethodChannel("com.ht99.companion/cts");
 
   BluetoothDevice? device;
-  BluetoothCharacteristic? writeChar;
-  BluetoothCharacteristic? alertChar;
-  BluetoothCharacteristic? batteryChar;
-  BluetoothCharacteristic? hrChar;
+  BluetoothCharacteristic? dogpWriteChar; // 2aa1
+  BluetoothCharacteristic? dogpNotifyChar; // 2abc
+  BluetoothCharacteristic? alertChar; // 2a06
+  BluetoothCharacteristic? batteryChar; // 2a19
 
   StreamSubscription? _scanSub;
   StreamSubscription? _notifySub;
@@ -26,7 +26,14 @@ class WatchController {
   void log(String msg) {
     String ts = DateTime.now().toIso8601String().substring(11, 19);
     logs.insert(0, "[$ts] $msg");
-    if (logs.length > 80) logs.removeLast();
+    if (logs.length > 100) logs.removeLast();
+  }
+
+  Future<void> stopScan() async {
+    try {
+      await FlutterBluePlus.stopScan();
+      await _scanSub?.cancel();
+    } catch (_) {}
   }
 
   Future<void> connect({
@@ -34,11 +41,19 @@ class WatchController {
     required Function() onConnected,
     required Function() onData,
   }) async {
-    onStatus("Scanning for HT99...");
-    log("Scanning for watch advertisements...");
+    onStatus("Initializing Bluetooth...");
+    log("Checking adapter state...");
 
     try {
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 12));
+      await _ctsChannel.invokeMethod("startCtsServer");
+      log("Native CTS Server initialized");
+    } catch (e) {
+      log("CTS initialization notice: $e");
+    }
+
+    onStatus("Scanning for HT99...");
+    try {
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
     } catch (e) {
       onStatus("Scan failed: $e");
       log("Scan error: $e");
@@ -52,12 +67,11 @@ class WatchController {
 
         if (name.contains("HT99") ||
             mac.contains("F9:47") ||
-            mac.contains("CC:76")) {
-          onStatus("Found HT99 ($mac). Binding...");
-          log("Acquired device: $name [$mac]");
-          await FlutterBluePlus.stopScan();
-          await _scanSub?.cancel();
-
+            mac.contains("CC:76") ||
+            mac.contains("F9:9B")) {
+          onStatus("Found HT99 ($mac). Connecting...");
+          log("Target acquired: $name [$mac]");
+          await stopScan();
           await _bind(r.device, onStatus, onConnected, onData);
           break;
         }
@@ -78,39 +92,42 @@ class WatchController {
         mtu: 256,
       );
       device = target;
-      log("Connected. Inspecting GATT services...");
+      log("Connected! Inspecting services...");
 
       List<BluetoothService> services = await target.discoverServices();
 
       for (var s in services) {
         for (var c in s.characteristics) {
-          String uuid = c.uuid.str.toLowerCase();
+          String u = c.uuid.str.toLowerCase();
 
           // 1. Immediate Alert (0x2A06)
-          if (uuid.contains("2a06")) {
+          if (u.contains("2a06")) {
             alertChar = c;
             log("Bound Alert (2a06)");
           }
-          // 2. Battery Service (0x2A19)
-          else if (uuid.contains("2a19")) {
+          // 2. Battery (0x2A19)
+          else if (u.contains("2a19")) {
             batteryChar = c;
             log("Bound Battery (2a19)");
           }
-          // 3. Heart Rate Service (0x2A37)
-          else if (uuid.contains("2a37")) {
-            hrChar = c;
-            log("Bound Heart Rate (2a37)");
-          }
-          // 4. Vendor Data Pipes (2aa1, KCT)
-          else if (c.properties.write || c.properties.writeWithoutResponse) {
-            writeChar = c;
-            log("Bound Data Write: $uuid");
+          // 3. MediaTek DOGP Channel (18a0 / 2aa1)
+          else if (u.contains("2aa1") ||
+              c.properties.write ||
+              c.properties.writeWithoutResponse) {
+            dogpWriteChar ??= c;
+            log("Bound DOGP Write: $u");
           }
 
-          if (c.properties.notify || c.properties.indicate) {
+          // 4. MediaTek DOGP Notify Channel (2abc)
+          if (u.contains("2abc") ||
+              c.properties.notify ||
+              c.properties.indicate) {
+            dogpNotifyChar ??= c;
             try {
               await c.setNotifyValue(true);
-              c.lastValueStream.listen((data) => _parseIncoming(data, onData));
+              _notifySub = c.lastValueStream
+                  .listen((data) => _parseIncoming(data, onData));
+              log("Subscribed to stream: $u");
             } catch (_) {}
           }
         }
@@ -119,14 +136,12 @@ class WatchController {
       onStatus("Connected & Synchronized");
       onConnected();
 
-      // Read initial battery
+      // Read battery level and sync clock
       await readBattery(onData);
-
-      // Trigger automatic CTS clock synchronization
       await syncTime();
     } catch (e) {
-      onStatus("Connection error: $e");
-      log("Bind exception: $e");
+      onStatus("Binding failed: $e");
+      log("Binding exception: $e");
     }
   }
 
@@ -135,7 +150,14 @@ class WatchController {
     String hex = data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
     log("RX: $hex");
 
-    // Standard Health / Step Packet Parsing
+    String ascii = String.fromCharCodes(data.where((b) => b >= 32 && b <= 126));
+    if (ascii.contains("ios indication")) {
+      log("Watch requested iOS/CTS verification. Broadcasting time...");
+      syncTime();
+      return;
+    }
+
+    // Packet decoders
     if (data[0] == 0xAB && data.length >= 4) {
       int cmd = data[2];
       if (cmd == 0x91 || cmd == 0x08) {
@@ -150,17 +172,17 @@ class WatchController {
     }
   }
 
-  // Dual-Engine Time Sync: CTS Phone Server + Direct Vendor Packet
+  // Triple-Channel Clock Synchronization
   Future<void> syncTime() async {
-    // 1. Trigger Android Native CTS GATT Server broadcast
+    // 1. Native CTS GATT Server Broadcast
     try {
       await _ctsChannel.invokeMethod("broadcastCtsTime");
-      log("CTS Server broadcast dispatched to watch");
+      log("CTS Server time broadcasted");
     } catch (e) {
-      log("CTS native broadcast notice: $e");
+      log("CTS broadcast notice: $e");
     }
 
-    // 2. Direct Vendor Fallback Packets
+    // 2. KCT Frame: 0xAB 0x00 0x04 [YYYY] [MM] [DD] [hh] [mm] [ss]
     DateTime now = DateTime.now();
     List<int> kctTime = [
       0xAB,
@@ -176,87 +198,77 @@ class WatchController {
     ];
     await writeRaw(kctTime);
 
-    List<int> mtkTime = [
-      0xEA,
-      0x01,
-      0x01,
-      now.year % 100,
-      now.month,
-      now.day,
-      now.hour,
-      now.minute,
-      now.second,
-    ];
-    await writeRaw(mtkTime);
+    // 3. MediaTek ASCII String Sync (from DataSyncController)
+    String mtkTimeStr =
+        "time ${now.year} ${now.month} ${now.day} ${now.hour} ${now.minute} ${now.second}\n";
+    await writeRaw(mtkTimeStr.codeUnits);
   }
 
-  // Trigger Watch Vibration / Find Watch
   Future<void> ringWatch() async {
     if (alertChar != null) {
       try {
         await alertChar!.write([0x02], withoutResponse: true);
-        log("Sent High Alert (0x02) to 2a06");
-      } catch (e) {
-        log("Alert write error: $e");
-      }
+        log("TX Immediate Alert: 0x02");
+      } catch (_) {}
     }
     await writeRaw([0xAB, 0x00, 0x03, 0x01]);
   }
 
-  // Read Battery Level from 0x2A19
   Future<void> readBattery(Function() onData) async {
     if (batteryChar != null) {
       try {
         var v = await batteryChar!.read();
         if (v.isNotEmpty) {
           batteryLevel = v[0];
-          log("SIG Battery: $batteryLevel%");
+          log("SIG Battery level: $batteryLevel%");
           onData();
         }
       } catch (_) {}
     }
+    await writeRaw([0xAB, 0x00, 0x91]); // KCT Battery Query
   }
 
-  // Send Push Notification Text
   Future<void> sendNotification(String title, String body) async {
     List<int> t = title.codeUnits;
     List<int> b = body.codeUnits;
-    List<int> packet = [
-      0xAB,
-      0x00,
-      0x02,
-      0x01,
-      t.length,
-      ...t,
-      b.length,
-      ...b,
-    ];
-    log("TX Notification: $title - $body");
+    List<int> packet = [0xAB, 0x00, 0x02, 0x01, t.length, ...t, b.length, ...b];
+    log("TX Notification: $title");
     await writeRaw(packet);
   }
 
-  // Hardware Feature Toggles
+  // Dial Push Framework (streams 320x385 .dat packets in 20-byte chunks)
+  Future<void> pushDial(List<int> datBytes, Function(double) onProgress) async {
+    log("Starting Dial Push (${datBytes.length} bytes)...");
+    const int chunkSize = 20;
+    int total = datBytes.length;
+
+    for (int i = 0; i < total; i += chunkSize) {
+      int end = (i + chunkSize < total) ? i + chunkSize : total;
+      await writeRaw(datBytes.sublist(i, end));
+      onProgress(end / total);
+      await Future.delayed(const Duration(milliseconds: 15));
+    }
+    log("Dial Push Completed!");
+  }
+
   Future<void> setWaterReminder(bool enable) async {
     await writeRaw([0xAB, 0x00, 0x12, enable ? 0x01 : 0x00]);
-    log("Water Reminder set: $enable");
   }
 
   Future<void> setSedentaryReminder(bool enable) async {
     await writeRaw([0xAB, 0x00, 0x13, enable ? 0x01 : 0x00]);
-    log("Sedentary Reminder set: $enable");
   }
 
-  Future<void> triggerHeartRateMeasure() async {
+  Future<void> triggerHeartRate() async {
     await writeRaw([0xAB, 0x00, 0x82, 0x01]);
-    log("Heart Rate Measurement initiated");
   }
 
   Future<bool> writeRaw(List<int> bytes) async {
-    if (writeChar == null) return false;
+    if (dogpWriteChar == null) return false;
     try {
-      await writeChar!.write(
+      await dogpWriteChar!.write(
         bytes,
-        withoutResponse: writeChar!.properties.writeWithoutResponse,
+        withoutResponse: dogpWriteChar!.properties.writeWithoutResponse,
       );
       return true;
     } catch (e) {
@@ -269,7 +281,8 @@ class WatchController {
     await _notifySub?.cancel();
     await device?.disconnect();
     device = null;
-    writeChar = null;
+    dogpWriteChar = null;
+    dogpNotifyChar = null;
     alertChar = null;
     batteryChar = null;
     log("Disconnected");

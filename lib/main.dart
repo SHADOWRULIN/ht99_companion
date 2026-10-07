@@ -1,27 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'watch_controller.dart';
 
 void main() {
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-  ));
-  runApp(const Ht99FullApp());
+  runApp(const Ht99MasterApp());
 }
 
-class Ht99FullApp extends StatelessWidget {
-  const Ht99FullApp({super.key});
+class Ht99MasterApp extends StatefulWidget {
+  const Ht99MasterApp({super.key});
+
+  @override
+  State<Ht99MasterApp> createState() => _Ht99MasterAppState();
+}
+
+class _Ht99MasterAppState extends State<Ht99MasterApp> {
+  ThemeMode _themeMode = ThemeMode.dark;
+
+  void toggleTheme(ThemeMode mode) {
+    setState(() => _themeMode = mode);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: "HT99 Manager Pro",
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
+      themeMode: _themeMode,
+      theme: ThemeData(
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: const Color(0xFFF6F8FB),
+        cardColor: Colors.white,
+        colorScheme: const ColorScheme.light(
+          primary: Color(0xFFFF5722),
+          secondary: Color(0xFF00B4D8),
+          surface: Colors.white,
+        ),
+        useMaterial3: true,
+      ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0A0C10),
+        scaffoldBackgroundColor: const Color(0xFF0D0F15),
         cardColor: const Color(0xFF161922),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFFFF5722),
@@ -30,70 +49,172 @@ class Ht99FullApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const MainNavigationShell(),
+      home: MainShell(onThemeChanged: toggleTheme, currentTheme: _themeMode),
     );
   }
 }
 
-class MainNavigationShell extends StatefulWidget {
-  const MainNavigationShell({super.key});
+class MainShell extends StatefulWidget {
+  final Function(ThemeMode) onThemeChanged;
+  final ThemeMode currentTheme;
+
+  const MainShell(
+      {super.key, required this.onThemeChanged, required this.currentTheme});
 
   @override
-  State<MainNavigationShell> createState() => _MainNavigationShellState();
+  State<MainShell> createState() => _MainShellState();
 }
 
-class _MainNavigationShellState extends State<MainNavigationShell> {
+class _MainShellState extends State<MainShell> {
   final WatchController _watch = WatchController();
-  int _currentIndex = 0;
-  String _status = "Ready to Connect";
+  int _tabIndex = 0;
+
   bool _connected = false;
   bool _connecting = false;
+  String _status = "Ready to connect";
+  BluetoothAdapterState _adapterState = BluetoothAdapterState.unknown;
 
-  // Settings states matching WWfit
   bool _waterReminder = false;
   bool _sedentaryReminder = false;
   int _stepGoal = 10000;
 
-  void _connect() {
+  @override
+  void initState() {
+    super.initState();
+    FlutterBluePlus.adapterState.listen((state) {
+      setState(() => _adapterState = state);
+    });
+  }
+
+  void _startConnecting() {
     setState(() {
       _connecting = true;
-      _status = "Connecting...";
+      _status = "Scanning for HT99...";
     });
 
+    _showConnectingDialog();
+
     _watch.connect(
-      onStatus: (msg) => setState(() => _status = msg),
-      onConnected: () => setState(() {
-        _connected = true;
-        _connecting = false;
-      }),
+      onStatus: (msg) {
+        setState(() => _status = msg);
+      },
+      onConnected: () {
+        setState(() {
+          _connected = true;
+          _connecting = false;
+        });
+        if (Navigator.canPop(context)) Navigator.pop(context);
+      },
       onData: () => setState(() {}),
     );
   }
 
-  void _disconnect() async {
-    await _watch.disconnect();
-    setState(() {
-      _connected = false;
-      _status = "Disconnected";
-    });
+  void _showConnectingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text("Connecting to HT99", textAlign: TextAlign.center),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 10),
+              const CircularProgressIndicator(color: Color(0xFFFF5722)),
+              const SizedBox(height: 20),
+              Text(_status,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13)),
+            ],
+          ),
+          actionsAlignment: MainAxisAlignment.spaceAround,
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await _watch.stopScan();
+                setState(() => _connecting = false);
+                if (Navigator.canPop(context)) Navigator.pop(context);
+              },
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                _watch.stopScan();
+                _watch.connect(
+                  onStatus: (msg) => setState(() => _status = msg),
+                  onConnected: () {
+                    setState(() {
+                      _connected = true;
+                      _connecting = false;
+                    });
+                    if (Navigator.canPop(context)) Navigator.pop(context);
+                  },
+                  onData: () => setState(() {}),
+                );
+              },
+              child: const Text("Search Again"),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> pages = [
-      _buildHomeScreen(),
-      _buildDeviceScreen(),
-      _buildMyScreen(),
-      _buildTerminalScreen(),
+    final pages = [
+      _buildHomeTab(),
+      _buildDeviceTab(),
+      _buildMyTab(),
+      _buildTerminalTab(),
     ];
 
     return Scaffold(
-      body: SafeArea(child: pages[_currentIndex]),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Warning Card: Bluetooth Off
+            if (_adapterState != BluetoothAdapterState.on &&
+                _adapterState != BluetoothAdapterState.unknown)
+              Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.redAccent),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.bluetooth_disabled,
+                        color: Colors.redAccent),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        "Bluetooth is turned off on your phone.",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => FlutterBluePlus.turnOn(),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white),
+                      child: const Text("Turn On"),
+                    ),
+                  ],
+                ),
+              ),
+            Expanded(child: pages[_tabIndex]),
+          ],
+        ),
+      ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (i) => setState(() => _currentIndex = i),
-        backgroundColor: const Color(0xFF12151D),
-        indicatorColor: const Color(0xFFFF5722).withOpacity(0.2),
+        selectedIndex: _tabIndex,
+        onDestinationSelected: (i) => setState(() => _tabIndex = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_rounded), label: "Home"),
           NavigationDestination(
@@ -106,8 +227,8 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     );
   }
 
-  // --- TAB 1: HOME (Steps, Progress, Telemetry) ---
-  Widget _buildHomeScreen() {
+  // --- TAB 1: HOME ---
+  Widget _buildHomeTab() {
     double progress = (_watch.stepCount / _stepGoal).clamp(0.0, 1.0);
 
     return ListView(
@@ -117,38 +238,36 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text("Home",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
             IconButton(
-              icon: const Icon(Icons.refresh, color: Color(0xFF00E5FF)),
+              icon: const Icon(Icons.sync),
               onPressed: _connected ? () => _watch.syncTime() : null,
-              tooltip: "Refresh Metrics",
+              tooltip: "Sync Watch",
             ),
           ],
         ),
-        const SizedBox(height: 20),
-
-        // Step Progress Arc Card
+        const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: const Color(0xFF161922),
+            color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: Colors.white10),
           ),
           child: Column(
             children: [
               const Text("today's steps",
-                  style: TextStyle(fontSize: 14, color: Colors.white60)),
-              const SizedBox(height: 12),
+                  style: TextStyle(fontSize: 14, color: Colors.grey)),
+              const SizedBox(height: 16),
               Stack(
                 alignment: Alignment.center,
                 children: [
                   SizedBox(
-                    width: 170,
-                    height: 170,
+                    width: 160,
+                    height: 160,
                     child: CircularProgressIndicator(
                       value: progress == 0 ? 0.05 : progress,
-                      strokeWidth: 14,
+                      strokeWidth: 12,
                       backgroundColor: Colors.white12,
                       color: const Color(0xFFFF5722),
                       strokeCap: StrokeCap.round,
@@ -156,54 +275,42 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
                   ),
                   Column(
                     children: [
-                      Text(
-                        "${_watch.stepCount}",
-                        style: const TextStyle(
-                            fontSize: 36, fontWeight: FontWeight.bold),
-                      ),
+                      Text("${_watch.stepCount}",
+                          style: const TextStyle(
+                              fontSize: 34, fontWeight: FontWeight.bold)),
                       Text("goal: $_stepGoal",
                           style: const TextStyle(
-                              fontSize: 12, color: Colors.white54)),
+                              fontSize: 12, color: Colors.grey)),
                     ],
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _subMetric("${(progress * 100).toInt()}%", "Percent"),
-                  _subMetric("${_watch.caloriesKcal}", "kcal"),
-                  _subMetric("${_watch.distanceKm.toStringAsFixed(2)}", "km"),
+                  _stat("${(progress * 100).toInt()}%", "Percent"),
+                  _stat("${_watch.caloriesKcal}", "kcal"),
+                  _stat("${_watch.distanceKm.toStringAsFixed(2)}", "km"),
                 ],
               ),
             ],
           ),
         ),
-
         const SizedBox(height: 16),
-
-        // Health Telemetry Row
         Row(
           children: [
             Expanded(
-              child: _infoCard(
-                icon: Icons.nightlight_round,
-                color: Colors.indigoAccent,
-                title: "Sleep",
-                value: "-- h",
-              ),
-            ),
+                child: _metricTile(Icons.nightlight_round, Colors.indigoAccent,
+                    "Sleep", "-- h")),
             const SizedBox(width: 12),
             Expanded(
-              child: _infoCard(
-                icon: Icons.favorite_rounded,
-                color: const Color(0xFFFF4757),
-                title: "HeartRate",
-                value:
-                    _watch.heartRate > 0 ? "${_watch.heartRate} bpm" : "-- bpm",
-                onTap:
-                    _connected ? () => _watch.triggerHeartRateMeasure() : null,
+              child: _metricTile(
+                Icons.favorite_rounded,
+                Colors.redAccent,
+                "HeartRate",
+                _watch.heartRate > 0 ? "${_watch.heartRate} bpm" : "-- bpm",
+                onTap: _connected ? () => _watch.triggerHeartRate() : null,
               ),
             ),
           ],
@@ -212,29 +319,25 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     );
   }
 
-  // --- TAB 2: DEVICE (WWfit Feature Grid) ---
-  Widget _buildDeviceScreen() {
+  // --- TAB 2: DEVICE ---
+  Widget _buildDeviceTab() {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        // Watch Connection Header
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFFFF5722), Color(0xFFFF7043)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+                colors: [Color(0xFFFF5722), Color(0xFFFF7043)]),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
             children: [
               CircleAvatar(
-                radius: 28,
+                radius: 26,
                 backgroundColor: Colors.white24,
                 child: Icon(_connected ? Icons.watch : Icons.watch_off,
-                    color: Colors.white, size: 30),
+                    color: Colors.white),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -243,117 +346,73 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
                   children: [
                     const Text("Model: HT99",
                         style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold)),
                     Text(
                       _connected
                           ? "Connected (${_watch.batteryLevel}% Battery)"
                           : "Disconnected",
                       style:
-                          const TextStyle(fontSize: 13, color: Colors.white70),
+                          const TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                   ],
                 ),
               ),
               ElevatedButton(
-                onPressed:
-                    _connecting ? null : (_connected ? _disconnect : _connect),
+                onPressed: _connecting
+                    ? null
+                    : (_connected
+                        ? () => setState(() => _connected = false)
+                        : _startConnecting),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black),
                 child: Text(_connected ? "Disconnect" : "Connect"),
               ),
             ],
           ),
         ),
-
-        const SizedBox(height: 20),
-
-        // Device Functions Card
+        const SizedBox(height: 16),
         Card(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: Column(
             children: [
-              _menuItem(
-                icon: Icons.sync,
-                color: const Color(0xFF00E5FF),
-                title: "Sync Phone Time",
-                subtitle: "Sync watch RTC via CTS Server",
-                onTap: _connected
-                    ? () async {
-                        await _watch.syncTime();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text("Clock synchronization sent!")));
-                      }
-                    : null,
-              ),
-              const Divider(height: 1, indent: 64, color: Colors.white10),
-              _menuItem(
-                icon: Icons.vibration,
-                color: const Color(0xFFFFA502),
-                title: "Find your bracelet",
-                subtitle: "Triggers Immediate Alert vibration",
-                onTap: _connected
-                    ? () async {
-                        await _watch.ringWatch();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text("Vibration alert sent!")));
-                      }
-                    : null,
-              ),
-              const Divider(height: 1, indent: 64, color: Colors.white10),
-              _menuItem(
-                icon: Icons.notifications_active_rounded,
-                color: const Color(0xFF2ED573),
-                title: "Message push",
-                subtitle: "Forward WhatsApp/SMS to watch",
-                onTap: () => _showNotificationDialog(),
-              ),
-              const Divider(height: 1, indent: 64, color: Colors.white10),
-              _switchItem(
-                icon: Icons.local_drink_rounded,
-                color: Colors.lightBlueAccent,
-                title: "Reminder to drink water",
-                value: _waterReminder,
-                onChanged: _connected
-                    ? (v) {
-                        setState(() => _waterReminder = v);
-                        _watch.setWaterReminder(v);
-                      }
-                    : null,
-              ),
-              const Divider(height: 1, indent: 64, color: Colors.white10),
-              _switchItem(
-                icon: Icons.airline_seat_recline_normal_rounded,
-                color: Colors.amber,
-                title: "Recumbent reminder",
-                value: _sedentaryReminder,
-                onChanged: _connected
-                    ? (v) {
-                        setState(() => _sedentaryReminder = v);
-                        _watch.setSedentaryReminder(v);
-                      }
-                    : null,
-              ),
-              const Divider(height: 1, indent: 64, color: Colors.white10),
-              _menuItem(
-                icon: Icons.wallpaper_rounded,
-                color: Colors.purpleAccent,
-                title: "Dial push",
-                subtitle: "320x385 Custom watch face",
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text(
-                            "Dial template ready: 320x385 resolution verified.")),
-                  );
-                },
-              ),
+              _actionTile(Icons.sync, Colors.cyan, "Sync Phone Time",
+                  "Broadcasts CTS Server clock", () async {
+                await _watch.syncTime();
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Time sync broadcasted!")));
+              }),
+              _actionTile(Icons.vibration, Colors.amber, "Find your bracelet",
+                  "Triggers Immediate Alert vibration", () async {
+                await _watch.ringWatch();
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Vibration alert sent!")));
+              }),
+              _actionTile(
+                  Icons.notifications_active_rounded,
+                  Colors.green,
+                  "Message push",
+                  "Send test WhatsApp message",
+                  () => _showNotifDialog()),
+              _switchTile(Icons.local_drink_rounded, Colors.blueAccent,
+                  "Reminder to drink water", _waterReminder, (v) {
+                setState(() => _waterReminder = v);
+                _watch.setWaterReminder(v);
+              }),
+              _switchTile(Icons.airline_seat_recline_normal_rounded,
+                  Colors.orange, "Recumbent reminder", _sedentaryReminder, (v) {
+                setState(() => _sedentaryReminder = v);
+                _watch.setSedentaryReminder(v);
+              }),
+              _actionTile(
+                  Icons.wallpaper_rounded,
+                  Colors.purpleAccent,
+                  "Dial push",
+                  "320x385 Custom watch face",
+                  () => _showDialGallery()),
             ],
           ),
         ),
@@ -361,63 +420,67 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     );
   }
 
-  // --- TAB 3: MY (Profile & Goals) ---
-  Widget _buildMyScreen() {
+  // --- TAB 3: MY (Theme & Profile) ---
+  Widget _buildMyTab() {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const Text("My Profile",
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 20),
+        const Text("Settings & Profile",
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
         Card(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: Column(
             children: [
               ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFFF5722),
-                  child:
-                      Icon(Icons.directions_run_rounded, color: Colors.white),
+                leading: const Icon(Icons.brightness_medium_rounded),
+                title: const Text("Appearance Theme"),
+                subtitle: Text(widget.currentTheme == ThemeMode.dark
+                    ? "Dark Mode"
+                    : "Light Mode"),
+                trailing: SegmentedButton<ThemeMode>(
+                  segments: const [
+                    ButtonSegment(
+                        value: ThemeMode.light, icon: Icon(Icons.light_mode)),
+                    ButtonSegment(
+                        value: ThemeMode.dark, icon: Icon(Icons.dark_mode)),
+                  ],
+                  selected: {widget.currentTheme},
+                  onSelectionChanged: (set) => widget.onThemeChanged(set.first),
                 ),
-                title: const Text("Step target"),
+              ),
+              const Divider(height: 1, indent: 64),
+              ListTile(
+                leading: const Icon(Icons.directions_run_rounded),
+                title: const Text("Step Target"),
                 subtitle: Text("$_stepGoal steps"),
                 trailing: DropdownButton<int>(
                   value: _stepGoal,
-                  dropdownColor: const Color(0xFF161922),
-                  items: [5000, 8000, 10000, 15000].map((v) {
-                    return DropdownMenuItem(value: v, child: Text("$v"));
-                  }).toList(),
+                  items: [5000, 8000, 10000, 15000]
+                      .map((v) => DropdownMenuItem(value: v, child: Text("$v")))
+                      .toList(),
                   onChanged: (v) => setState(() => _stepGoal = v ?? 10000),
                 ),
-              ),
-              const Divider(height: 1, indent: 64, color: Colors.white10),
-              const ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.indigoAccent,
-                  child: Icon(Icons.bedtime_rounded, color: Colors.white),
-                ),
-                title: Text("Sleep target"),
-                subtitle: Text("8 hours"),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         Card(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: const Column(
             children: [
               ListTile(
-                leading: Icon(Icons.info_outline_rounded),
-                title: Text("Hardware Info"),
-                subtitle: Text("MediaTek MTK2502C (320x385 Display)"),
+                leading: Icon(Icons.memory_rounded),
+                title: Text("Chipset"),
+                subtitle: Text("MediaTek MTK2502C (320x385 IPS)"),
               ),
-              Divider(height: 1, indent: 64, color: Colors.white10),
+              Divider(height: 1, indent: 64),
               ListTile(
                 leading: Icon(Icons.bluetooth_connected_rounded),
-                title: Text("Target Device MAC"),
+                title: Text("BLE Target MAC"),
                 subtitle: Text("F9:47:B2:F6:EC:7C"),
               ),
             ],
@@ -427,47 +490,40 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     );
   }
 
-  // --- TAB 4: TERMINAL (Diagnostics & Live RX/TX) ---
-  Widget _buildTerminalScreen() {
+  // --- TAB 4: TERMINAL ---
+  Widget _buildTerminalTab() {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Text("Status: $_status",
-                    style:
-                        const TextStyle(fontSize: 12, color: Colors.white60)),
-              ),
-              ElevatedButton.icon(
-                onPressed: () => setState(() => _watch.logs.clear()),
-                icon: const Icon(Icons.clear_all, size: 16),
-                label: const Text("Clear"),
-              ),
+              Text(
+                  "Connected Pipe: ${_watch.dogpWriteChar?.uuid.str.substring(0, 4) ?? 'None'}",
+                  style: const TextStyle(fontSize: 12)),
+              TextButton(
+                  onPressed: () => setState(() => _watch.logs.clear()),
+                  child: const Text("Clear")),
             ],
           ),
-          const SizedBox(height: 10),
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white24),
-              ),
+                  color: Colors.black, borderRadius: BorderRadius.circular(16)),
               child: ListView.builder(
                 itemCount: _watch.logs.length,
                 itemBuilder: (context, i) {
-                  String line = _watch.logs[i];
-                  Color color = line.contains("RX:")
-                      ? const Color(0xFF00E5FF)
-                      : (line.contains("TX")
-                          ? const Color(0xFFFFA502)
+                  String l = _watch.logs[i];
+                  Color c = l.contains("RX:")
+                      ? Colors.cyanAccent
+                      : (l.contains("TX")
+                          ? Colors.amberAccent
                           : Colors.white70);
-                  return Text(line,
+                  return Text(l,
                       style: TextStyle(
-                          fontFamily: "monospace", fontSize: 11, color: color));
+                          fontFamily: "monospace", fontSize: 11, color: c));
                 },
               ),
             ),
@@ -477,118 +533,138 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     );
   }
 
-  // --- UI Helpers ---
-  Widget _subMetric(String value, String label) {
-    return Column(
-      children: [
-        Text(value,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        Text(label,
-            style: const TextStyle(fontSize: 11, color: Colors.white54)),
-      ],
-    );
-  }
-
-  Widget _infoCard(
-      {required IconData icon,
-      required Color color,
-      required String title,
-      required String value,
-      VoidCallback? onTap}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF161922),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white10),
-        ),
+  // --- Modals ---
+  void _showDialGallery() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 12),
-            Text(title,
-                style: const TextStyle(fontSize: 13, color: Colors.white60)),
-            const SizedBox(height: 4),
-            Text(value,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text("320x385 Watch Face Dials",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _dialPreview("Classic Chrono", Colors.blueGrey),
+                _dialPreview("Sport Digital", Colors.deepOrange),
+                _dialPreview("Minimal Gold", Colors.amber),
+              ],
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: _connected
+                    ? () {
+                        Navigator.pop(ctx);
+                        _watch.pushDial([0xAB, 0x00, 0x01], (p) {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text("Streaming dial data...")));
+                      }
+                    : null,
+                icon: const Icon(Icons.upload_rounded),
+                label: const Text("Push Selected Dial"),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _menuItem(
-      {required IconData icon,
-      required Color color,
-      required String title,
-      required String subtitle,
-      VoidCallback? onTap}) {
-    return ListTile(
-      leading: CircleAvatar(
-          backgroundColor: color.withOpacity(0.15),
-          child: Icon(icon, color: color)),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle,
-          style: const TextStyle(fontSize: 12, color: Colors.white54)),
-      trailing: const Icon(Icons.arrow_forward_ios_rounded,
-          size: 14, color: Colors.white30),
-      onTap: onTap,
+  Widget _dialPreview(String name, Color color) {
+    return Column(
+      children: [
+        Container(
+          width: 80,
+          height: 100,
+          decoration: BoxDecoration(
+              color: color, borderRadius: BorderRadius.circular(16)),
+          child: const Center(
+              child: Text("10:09",
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold))),
+        ),
+        const SizedBox(height: 6),
+        Text(name, style: const TextStyle(fontSize: 11)),
+      ],
     );
   }
 
-  Widget _switchItem(
-      {required IconData icon,
-      required Color color,
-      required String title,
-      required bool value,
-      ValueChanged<bool>? onChanged}) {
-    return SwitchListTile(
-      secondary: CircleAvatar(
-          backgroundColor: color.withOpacity(0.15),
-          child: Icon(icon, color: color)),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      value: value,
-      onChanged: onChanged,
-    );
-  }
+  Widget _stat(String v, String l) => Column(children: [
+        Text(v,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(l, style: const TextStyle(fontSize: 11, color: Colors.grey))
+      ]);
+  Widget _metricTile(IconData i, Color c, String t, String v,
+          {VoidCallback? onTap}) =>
+      InkWell(
+          onTap: onTap,
+          child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(20)),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(i, color: c),
+                    const SizedBox(height: 8),
+                    Text(t,
+                        style:
+                            const TextStyle(fontSize: 12, color: Colors.grey)),
+                    Text(v,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold))
+                  ])));
+  Widget _actionTile(
+          IconData i, Color c, String t, String s, VoidCallback onTap) =>
+      ListTile(
+          leading: CircleAvatar(
+              backgroundColor: c.withOpacity(0.15), child: Icon(i, color: c)),
+          title: Text(t),
+          subtitle: Text(s, style: const TextStyle(fontSize: 11)),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _connected ? onTap : null);
+  Widget _switchTile(
+          IconData i, Color c, String t, bool v, ValueChanged<bool> onChange) =>
+      SwitchListTile(
+          secondary: CircleAvatar(
+              backgroundColor: c.withOpacity(0.15), child: Icon(i, color: c)),
+          title: Text(t),
+          value: v,
+          onChanged: _connected ? onChange : null);
 
-  void _showNotificationDialog() {
-    final titleCtrl = TextEditingController(text: "WhatsApp");
-    final bodyCtrl =
-        TextEditingController(text: "New message from HT99 Companion!");
-
+  void _showNotifDialog() {
+    final t = TextEditingController(text: "WhatsApp");
+    final b = TextEditingController(text: "Hello from HT99 Companion!");
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161922),
         title: const Text("Push Notification"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-                controller: titleCtrl,
-                decoration:
-                    const InputDecoration(labelText: "App Name / Title")),
-            const SizedBox(height: 10),
-            TextField(
-                controller: bodyCtrl,
-                decoration: const InputDecoration(labelText: "Message Body")),
-          ],
-        ),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+              controller: t,
+              decoration: const InputDecoration(labelText: "App Name")),
+          TextField(
+              controller: b,
+              decoration: const InputDecoration(labelText: "Body")),
+        ]),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
           ElevatedButton(
             onPressed: () {
-              _watch.sendNotification(titleCtrl.text, bodyCtrl.text);
+              _watch.sendNotification(t.text, b.text);
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Notification sent!")));
             },
             child: const Text("Send"),
           ),
