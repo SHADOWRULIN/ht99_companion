@@ -2,30 +2,34 @@ import 'dart:async';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class WatchController {
-  // Target MAC Address found on your watch screen
   static const String targetMac = "F9:47:B2:F6:EC:7C";
 
-  // The exact KCT UUIDs extracted from s1.g
-  static final Guid serviceUuidPrimary =
-      Guid("c3e6fea0-e966-1000-8000-be99c223df6a");
-  static final Guid charUuidPrimary =
-      Guid("c3e6fea1-e966-1000-8000-be99c223df6a");
+  // All known KCT & MediaTek Service UUIDs from s1.g
+  static final List<String> targetServices = [
+    "c3e6fea0-e966-1000-8000-be99c223df6a",
+    "0783b03e-8535-b5a0-7140-a304d2495cb7",
+    "b75c49d2-04a3-4071-a0b5-35853eb08307",
+    "0000fea0-0000-1000-8000-00805f9b34fb",
+    "0000fee7-0000-1000-8000-00805f9b34fb",
+  ];
 
-  static final Guid serviceUuidSecondary =
-      Guid("0783b03e-8535-b5a0-7140-a304d2495cb7");
-  static final Guid charUuidSecondary =
-      Guid("0783b03e-8535-b5a0-7140-a304d2495cba");
+  // All known write characteristic UUIDs from s1.g
+  static final List<String> targetCharacteristics = [
+    "c3e6fea1-e966-1000-8000-be99c223df6a",
+    "0783b03e-8535-b5a0-7140-a304d2495cba",
+    "0783b03e-8535-b5a0-7140-a304d2495cb8",
+    "c3e6fea2-e966-1000-8000-be99c223df6a",
+  ];
 
   BluetoothDevice? connectedDevice;
   BluetoothCharacteristic? writeCharacteristic;
   StreamSubscription? _scanSub;
 
-// 1. Scan and Connect
   Future<void> connectToWatch({
     required Function(String) onStatus,
     required Function() onConnected,
   }) async {
-    onStatus("Starting Bluetooth Scan...");
+    onStatus("Scanning for HT99...");
 
     await FlutterBluePlus.startScan(
       timeout: const Duration(seconds: 15),
@@ -48,71 +52,82 @@ class WatchController {
     });
   }
 
-  // 2. Discover Services and Match Extracted UUIDs
   Future<void> _bindDevice(
     BluetoothDevice device,
     Function(String) onStatus,
     Function() onConnected,
   ) async {
     try {
-      onStatus("Connecting with high-speed MTU...");
-
-      // Pass License.free and MTU directly to connect()
+      onStatus("Connecting...");
       await device.connect(
         license: License.free,
         autoConnect: false,
         mtu: 256,
       );
-
       connectedDevice = device;
-      onStatus("Connected! Discovering KCT Services...");
 
+      onStatus("Discovering watch services...");
       List<BluetoothService> services = await device.discoverServices();
 
+      List<String> foundServiceUuids = [];
+
+      // 1. Check for exact KCT characteristic match
       for (BluetoothService service in services) {
-        if (service.uuid == serviceUuidPrimary ||
-            service.uuid == serviceUuidSecondary) {
-          for (BluetoothCharacteristic characteristic
-              in service.characteristics) {
-            if (characteristic.uuid == charUuidPrimary ||
-                characteristic.uuid == charUuidSecondary) {
-              writeCharacteristic = characteristic;
-              onStatus("Ready! Bound to KCT Characteristic.");
-              onConnected();
-              return;
-            }
+        String sUuid = service.uuid.str.toLowerCase();
+        foundServiceUuids.add(sUuid);
+
+        for (BluetoothCharacteristic characteristic in service.characteristics) {
+          String cUuid = characteristic.uuid.str.toLowerCase();
+
+          if (targetCharacteristics.contains(cUuid)) {
+            writeCharacteristic = characteristic;
+            onStatus("Ready! Bound to KCT Characteristic.");
+            onConnected();
+            return;
           }
         }
       }
 
-      onStatus("Device connected, but KCT service was not found.");
+      // 2. Fallback: Automatically latch onto any writable characteristic
+      for (BluetoothService service in services) {
+        for (BluetoothCharacteristic characteristic in service.characteristics) {
+          if (characteristic.properties.writeWithoutResponse ||
+              characteristic.properties.write) {
+            writeCharacteristic = characteristic;
+            onStatus("Ready! Bound to writable: ${characteristic.uuid.str.substring(0, 8)}...");
+            onConnected();
+            return;
+          }
+        }
+      }
+
+      // 3. If no writable characteristic exists, display the found services
+      onStatus("No writable channel found.\nServices:\n${foundServiceUuids.join('\n')}");
     } catch (e) {
       onStatus("Connection error: $e");
     }
   }
 
-  // 3. Send Sliced Byte Packets (Mirroring com.kct.bluetooth.c.J)
   Future<bool> sendBytes(List<int> bytes) async {
     if (writeCharacteristic == null) return false;
 
-    const int chunkSize = 20; // Default KCT packet slice size
+    const int chunkSize = 20;
     int length = bytes.length;
 
     if (length <= chunkSize) {
       await writeCharacteristic!.write(
         bytes,
-        withoutResponse: true, // Corresponds to setWriteType(1)
+        withoutResponse: writeCharacteristic!.properties.writeWithoutResponse,
       );
       return true;
     }
 
-    // Packet chunking loop
     for (int i = 0; i < length; i += chunkSize) {
       int end = (i + chunkSize < length) ? i + chunkSize : length;
       List<int> chunk = bytes.sublist(i, end);
       await writeCharacteristic!.write(
         chunk,
-        withoutResponse: true,
+        withoutResponse: writeCharacteristic!.properties.writeWithoutResponse,
       );
       await Future.delayed(const Duration(milliseconds: 15));
     }
@@ -120,15 +135,13 @@ class WatchController {
     return true;
   }
 
-  // 4. Time Sync Packet (KCT Format)
   Future<void> syncTimeNow() async {
     DateTime now = DateTime.now();
 
-    // Standard KCT RTC command array
     List<int> timePacket = [
-      0xAB, // KCT packet header
+      0xAB,
       0x00,
-      0x04, // Command ID: Time Sync
+      0x04,
       (now.year >> 8) & 0xFF,
       now.year & 0xFF,
       now.month,
