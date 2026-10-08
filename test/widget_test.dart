@@ -13,7 +13,7 @@ import 'package:ht99_companion/main.dart';
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const Ht99MasterApp());
+    await tester.pumpWidget(const Ht99AppMaster());
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);
