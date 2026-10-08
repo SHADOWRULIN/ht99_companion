@@ -29,7 +29,7 @@ class SettingsTab extends StatelessWidget {
             children: [
               ListTile(
                 leading: const Icon(Icons.brightness_medium_rounded),
-                title: const Text("Appearance Theme"),
+                title: const Text("Theme Mode"),
                 subtitle: Text(currentTheme == ThemeMode.dark
                     ? "Dark Mode"
                     : "Light Mode"),
@@ -68,7 +68,7 @@ class SettingsTab extends StatelessWidget {
               ListTile(
                 leading: Icon(Icons.memory_rounded),
                 title: Text("Platform"),
-                subtitle: Text("MediaTek MTK2502C (320x385 IPS)"),
+                subtitle: Text("MediaTek MTK2502C (320x385 Display)"),
               ),
               Divider(height: 1, indent: 64),
               ListTile(

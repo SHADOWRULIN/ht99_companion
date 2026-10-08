@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/watch_ble_service.dart';
-import '../services/dial_transfer_service.dart';
+import '../services/dial_service.dart';
 
 class DeviceTab extends StatefulWidget {
   final WatchBleService ble;
@@ -14,13 +14,14 @@ class DeviceTab extends StatefulWidget {
 }
 
 class _DeviceTabState extends State<DeviceTab> {
-  late final DialTransferService _dialService = DialTransferService(widget.ble);
+  late final DialService _dialService = DialService(widget.ble);
   double _uploadProgress = 0.0;
   bool _isUploading = false;
 
   void _showNotificationDialog() {
     final title = TextEditingController(text: "WhatsApp");
     final body = TextEditingController(text: "Hello from HT99 Companion!");
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -34,7 +35,7 @@ class _DeviceTabState extends State<DeviceTab> {
             const SizedBox(height: 8),
             TextField(
                 controller: body,
-                decoration: const InputDecoration(labelText: "Body Text")),
+                decoration: const InputDecoration(labelText: "Message Body")),
           ],
         ),
         actions: [
@@ -42,10 +43,47 @@ class _DeviceTabState extends State<DeviceTab> {
               onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
           ElevatedButton(
             onPressed: () {
-              widget.ble.sendNotification(title.text, body.text);
+              widget.ble.pushNotification(title.text, body.text);
               Navigator.pop(ctx);
             },
             child: const Text("Send"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showWeatherDialog() {
+    final city = TextEditingController(text: "Karachi");
+    final temp = TextEditingController(text: "31");
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Sync Weather"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+                controller: city,
+                decoration: const InputDecoration(labelText: "City Name")),
+            const SizedBox(height: 8),
+            TextField(
+                controller: temp,
+                decoration:
+                    const InputDecoration(labelText: "Temperature (°C)")),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              int t = int.tryParse(temp.text) ?? 25;
+              widget.ble.pushWeather(city.text, "Sunny", t, t + 4, t - 4);
+              Navigator.pop(ctx);
+            },
+            child: const Text("Sync Weather"),
           ),
         ],
       ),
@@ -75,12 +113,12 @@ class _DeviceTabState extends State<DeviceTab> {
                 ElevatedButton.icon(
                   onPressed: () async {
                     setModalState(() => _isUploading = true);
-                    List<int> sampleDatBytes = List.filled(400, 0x1A);
-                    await _dialService.uploadDial(sampleDatBytes, (p) {
+                    List<int> sampleDat = List.filled(400, 0x1A);
+                    await _dialService.sendDialDat(sampleDat, (p) {
                       setModalState(() => _uploadProgress = p);
                     });
                     setModalState(() => _isUploading = false);
-                    if (mounted) Navigator.pop(ctx);
+                    if (ctx.mounted) Navigator.pop(ctx);
                   },
                   icon: const Icon(Icons.upload_file_rounded),
                   label: const Text("Push Test Dial (320x385)"),
@@ -94,7 +132,7 @@ class _DeviceTabState extends State<DeviceTab> {
 
   @override
   Widget build(BuildContext context) {
-    bool connected = widget.ble.targetDevice != null;
+    bool connected = widget.ble.device != null;
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -159,12 +197,11 @@ class _DeviceTabState extends State<DeviceTab> {
                       Icon(Icons.access_time_filled, color: Color(0xFF6C5CE7)),
                 ),
                 title: const Text("12-Hour Format"),
-                subtitle: Text(widget.ble.telemetry.is12HourFormat
+                subtitle: Text(widget.ble.telemetry.is12Hour
                     ? "AM/PM Mode"
                     : "24-Hour Mode"),
-                value: widget.ble.telemetry.is12HourFormat,
-                onChanged:
-                    connected ? (v) => widget.ble.setTimeFormat(v) : null,
+                value: widget.ble.telemetry.is12Hour,
+                onChanged: connected ? (v) => widget.ble.syncClock(v) : null,
               ),
               const Divider(height: 1, indent: 64),
               ListTile(
@@ -185,9 +222,20 @@ class _DeviceTabState extends State<DeviceTab> {
                       color: Color(0xFF00E5FF)),
                 ),
                 title: const Text("Push Notification"),
-                subtitle: const Text("Send XML structured message"),
+                subtitle: const Text("Send structured XML text"),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: connected ? _showNotificationDialog : null,
+              ),
+              const Divider(height: 1, indent: 64),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0x222ECC71),
+                  child: Icon(Icons.cloud_sync, color: Color(0xFF2ECC71)),
+                ),
+                title: const Text("Sync Weather"),
+                subtitle: const Text("Update temperatures and forecast"),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: connected ? _showWeatherDialog : null,
               ),
               const Divider(height: 1, indent: 64),
               ListTile(

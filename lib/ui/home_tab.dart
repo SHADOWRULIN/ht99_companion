@@ -20,10 +20,9 @@ class HomeTab extends StatelessWidget {
             const Text("Activity",
                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
             IconButton(
-              icon: const Icon(Icons.sync_rounded),
-              onPressed:
-                  ble.targetDevice != null ? () => ble.syncPhoneTime() : null,
-              tooltip: "Sync Clock",
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: ble.device != null ? () => ble.queryPedometer() : null,
+              tooltip: "Refresh Stats",
             ),
           ],
         ),
@@ -72,9 +71,9 @@ class HomeTab extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _stat("${(progress * 100).toInt()}%", "Progress"),
+                  _stat("${(progress * 100).toInt()}%", "Goal"),
                   _stat("${ble.telemetry.calories}", "kcal"),
-                  _stat("${ble.telemetry.distanceKm.toStringAsFixed(2)}", "km"),
+                  _stat(ble.telemetry.distanceKm.toStringAsFixed(2), "km"),
                 ],
               ),
             ],

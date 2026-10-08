@@ -7,10 +7,10 @@ class TerminalTab extends StatelessWidget {
 
   const TerminalTab({super.key, required this.ble});
 
-  void _copyAllLogs(BuildContext context) {
+  void _copyAll(BuildContext context) {
     if (ble.logs.isEmpty) return;
-    String allLogs = ble.logs.reversed.join("\n");
-    Clipboard.setData(ClipboardData(text: allLogs));
+    String all = ble.logs.reversed.join("\n");
+    Clipboard.setData(ClipboardData(text: all));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("All logs copied to clipboard!")),
     );
@@ -26,14 +26,14 @@ class TerminalTab extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "Logs (${ble.logs.length})",
+                "Terminal Logs (${ble.logs.length})",
                 style:
-                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               Row(
                 children: [
                   ElevatedButton.icon(
-                    onPressed: () => _copyAllLogs(context),
+                    onPressed: () => _copyAll(context),
                     icon: const Icon(Icons.copy_rounded, size: 16),
                     label: const Text("Copy All"),
                     style: ElevatedButton.styleFrom(
@@ -61,7 +61,7 @@ class TerminalTab extends StatelessWidget {
               ),
               child: ble.logs.isEmpty
                   ? const Center(
-                      child: Text("No traffic yet",
+                      child: Text("Waiting for connection...",
                           style: TextStyle(color: Colors.grey, fontSize: 12)),
                     )
                   : ListView.builder(
@@ -70,10 +70,10 @@ class TerminalTab extends StatelessWidget {
                         String line = ble.logs[i];
                         Color color = line.contains("RX")
                             ? const Color(0xFF00E5FF)
-                            : (line.contains("Error") || line.contains("failed")
+                            : (line.contains("error") || line.contains("fail")
                                 ? Colors.redAccent
-                                : (line.contains("Parsed")
-                                    ? Colors.greenAccent
+                                : (line.contains("Dispatched")
+                                    ? Colors.amberAccent
                                     : Colors.white70));
                         return Text(
                           line,

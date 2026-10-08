@@ -7,17 +7,17 @@ import 'ui/terminal_tab.dart';
 import 'ui/settings_tab.dart';
 
 void main() {
-  runApp(const Ht99AppMaster());
+  runApp(const Ht99MasterApp());
 }
 
-class Ht99AppMaster extends StatefulWidget {
-  const Ht99AppMaster({super.key});
+class Ht99MasterApp extends StatefulWidget {
+  const Ht99MasterApp({super.key});
 
   @override
-  State<Ht99AppMaster> createState() => _Ht99AppMasterState();
+  State<Ht99MasterApp> createState() => _Ht99MasterAppState();
 }
 
-class _Ht99AppMasterState extends State<Ht99AppMaster> {
+class _Ht99MasterAppState extends State<Ht99MasterApp> {
   ThemeMode _themeMode = ThemeMode.dark;
   final WatchBleService _ble = WatchBleService();
 
@@ -28,7 +28,7 @@ class _Ht99AppMasterState extends State<Ht99AppMaster> {
   @override
   void initState() {
     super.initState();
-    _ble.onDataUpdate = () => setState(() {});
+    _ble.onData = () => setState(() {});
 
     FlutterBluePlus.adapterState.listen((state) {
       setState(() => _adapterState = state);
@@ -36,7 +36,7 @@ class _Ht99AppMasterState extends State<Ht99AppMaster> {
   }
 
   void _showScanModal() {
-    _ble.startScan();
+    _ble.scanAndConnect();
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -47,8 +47,7 @@ class _Ht99AppMasterState extends State<Ht99AppMaster> {
           children: [
             CircularProgressIndicator(color: Color(0xFFFF5722)),
             SizedBox(height: 16),
-            Text("Scanning nearby BLE advertisements...",
-                textAlign: TextAlign.center),
+            Text("Negotiating MTK session...", textAlign: TextAlign.center),
           ],
         ),
         actionsAlignment: MainAxisAlignment.spaceAround,
@@ -63,7 +62,7 @@ class _Ht99AppMasterState extends State<Ht99AppMaster> {
           ElevatedButton(
             onPressed: () {
               _ble.stopScan();
-              _ble.startScan();
+              _ble.scanAndConnect();
             },
             child: const Text("Search Again"),
           ),
@@ -71,7 +70,7 @@ class _Ht99AppMasterState extends State<Ht99AppMaster> {
       ),
     );
 
-    _ble.onConnectedCallback = () {
+    _ble.onConnected = () {
       if (Navigator.canPop(context)) Navigator.pop(context);
     };
   }
