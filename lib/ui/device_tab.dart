@@ -54,8 +54,7 @@ class _DeviceTabState extends State<DeviceTab> {
   }
 
   void _showWeatherDialog() {
-    final city = TextEditingController(text: "Karachi");
-    final temp = TextEditingController(text: "31");
+    final tempCtrl = TextEditingController(text: "31");
 
     showDialog(
       context: context,
@@ -65,11 +64,7 @@ class _DeviceTabState extends State<DeviceTab> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-                controller: city,
-                decoration: const InputDecoration(labelText: "City Name")),
-            const SizedBox(height: 8),
-            TextField(
-                controller: temp,
+                controller: tempCtrl,
                 decoration:
                     const InputDecoration(labelText: "Temperature (°C)")),
           ],
@@ -79,11 +74,11 @@ class _DeviceTabState extends State<DeviceTab> {
               onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
           ElevatedButton(
             onPressed: () {
-              int t = int.tryParse(temp.text) ?? 25;
-              widget.ble.pushWeather(city.text, "Sunny", t, t + 4, t - 4);
+              int t = int.tryParse(tempCtrl.text) ?? 31;
+              widget.ble.pushWeather(t, 1, t + 4, t - 4);
               Navigator.pop(ctx);
             },
-            child: const Text("Sync Weather"),
+            child: const Text("Sync"),
           ),
         ],
       ),

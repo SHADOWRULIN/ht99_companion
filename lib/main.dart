@@ -36,7 +36,10 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
   }
 
   void _showScanModal() {
+    if (_ble.isConnecting || _ble.isConnected) return;
+
     _ble.scanAndConnect();
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -47,7 +50,8 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
           children: [
             CircularProgressIndicator(color: Color(0xFFFF5722)),
             SizedBox(height: 16),
-            Text("Negotiating MTK session...", textAlign: TextAlign.center),
+            Text("Negotiating link & handshake...",
+                textAlign: TextAlign.center),
           ],
         ),
         actionsAlignment: MainAxisAlignment.spaceAround,
@@ -55,6 +59,7 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
           TextButton(
             onPressed: () {
               _ble.stopScan();
+              _ble.isConnecting = false;
               Navigator.pop(ctx);
             },
             child: const Text("Cancel"),
@@ -62,6 +67,7 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
           ElevatedButton(
             onPressed: () {
               _ble.stopScan();
+              _ble.isConnecting = false;
               _ble.scanAndConnect();
             },
             child: const Text("Search Again"),
