@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/watch_ble_service.dart';
+import 'health_detail_screen.dart';
 
 class HomeTab extends StatelessWidget {
   final WatchBleService ble;
@@ -17,16 +18,19 @@ class HomeTab extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("Activity",
+            const Text("Home",
                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
             IconButton(
-              icon: const Icon(Icons.refresh_rounded),
-              onPressed: ble.device != null ? () => ble.queryPedometer() : null,
-              tooltip: "Refresh Stats",
+              icon: const Icon(Icons.refresh_rounded, color: Color(0xFFFF5722)),
+              onPressed:
+                  ble.isConnected ? () => ble.queryAllHealthData() : null,
+              tooltip: "Refresh Health Data",
             ),
           ],
         ),
         const SizedBox(height: 16),
+
+        // Steps Progress Arc Card
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
@@ -36,7 +40,7 @@ class HomeTab extends StatelessWidget {
           ),
           child: Column(
             children: [
-              const Text("Today's Steps",
+              const Text("today's steps",
                   style: TextStyle(fontSize: 14, color: Colors.grey)),
               const SizedBox(height: 16),
               Stack(
@@ -55,12 +59,10 @@ class HomeTab extends StatelessWidget {
                   ),
                   Column(
                     children: [
-                      Text(
-                        "${ble.telemetry.steps}",
-                        style: const TextStyle(
-                            fontSize: 36, fontWeight: FontWeight.bold),
-                      ),
-                      Text("Goal: $stepGoal",
+                      Text("${ble.telemetry.steps}",
+                          style: const TextStyle(
+                              fontSize: 36, fontWeight: FontWeight.bold)),
+                      Text("goal: $stepGoal",
                           style: const TextStyle(
                               fontSize: 12, color: Colors.grey)),
                     ],
@@ -71,37 +73,113 @@ class HomeTab extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _stat("${(progress * 100).toInt()}%", "Goal"),
+                  _stat("${(progress * 100).toInt()}%", "Percent"),
                   _stat("${ble.telemetry.calories}", "kcal"),
                   _stat(ble.telemetry.distanceKm.toStringAsFixed(2), "km"),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const Row(
+                children: [
+                  Icon(Icons.navigation_rounded,
+                      color: Color(0xFFFF5722), size: 16),
+                  SizedBox(width: 6),
+                  Text("GPS 0.0km",
+                      style: TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),
             ],
           ),
         ),
+
         const SizedBox(height: 16),
-        Row(
+
+        // 6 Health Cards matching the video
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.35,
           children: [
-            Expanded(
-              child: _infoTile(
-                context,
-                Icons.favorite_rounded,
-                Colors.redAccent,
-                "Heart Rate",
-                ble.telemetry.heartRate > 0
-                    ? "${ble.telemetry.heartRate} BPM"
-                    : "-- BPM",
-              ),
+            _healthCard(
+              context,
+              icon: Icons.nightlight_round,
+              color: Colors.indigoAccent,
+              title: "Sleep",
+              value: ble.telemetry.sleepHours > 0
+                  ? "${ble.telemetry.sleepHours} h"
+                  : "--",
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          HealthDetailScreen(type: "Sleep", ble: ble))),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _infoTile(
-                context,
-                Icons.battery_charging_full_rounded,
-                Colors.tealAccent,
-                "Battery",
-                "${ble.telemetry.batteryLevel}%",
-              ),
+            _healthCard(
+              context,
+              icon: Icons.favorite_rounded,
+              color: const Color(0xFFFF4757),
+              title: "HeartRate",
+              value: ble.telemetry.heartRate > 0
+                  ? "${ble.telemetry.heartRate} bpm"
+                  : "-- times/minute",
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          HealthDetailScreen(type: "HeartRate", ble: ble))),
+            ),
+            _healthCard(
+              context,
+              icon: Icons.water_drop_rounded,
+              color: Colors.redAccent,
+              title: "BP",
+              value: ble.telemetry.systolicBp > 0
+                  ? "${ble.telemetry.systolicBp}/${ble.telemetry.diastolicBp} mmHg"
+                  : "-- mmHg",
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          HealthDetailScreen(type: "BP", ble: ble))),
+            ),
+            _healthCard(
+              context,
+              icon: Icons.bubble_chart_rounded,
+              color: Colors.amber,
+              title: "Immunity",
+              value: ble.telemetry.immunity > 0
+                  ? "${ble.telemetry.immunity} %"
+                  : "-- %",
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          HealthDetailScreen(type: "Immunity", ble: ble))),
+            ),
+            _healthCard(
+              context,
+              icon: Icons.thermostat_rounded,
+              color: Colors.tealAccent,
+              title: "Thermometer",
+              value: ble.telemetry.bodyTemp > 0
+                  ? "${ble.telemetry.bodyTemp} °C"
+                  : "-- °C",
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          HealthDetailScreen(type: "Thermometer", ble: ble))),
+            ),
+            _healthCard(
+              context,
+              icon: Icons.battery_charging_full_rounded,
+              color: Colors.cyanAccent,
+              title: "Battery",
+              value: "${ble.telemetry.batteryLevel} %",
+              onTap: null,
             ),
           ],
         ),
@@ -109,36 +187,42 @@ class HomeTab extends StatelessWidget {
     );
   }
 
-  Widget _stat(String value, String label) {
-    return Column(
-      children: [
-        Text(value,
+  Widget _stat(String v, String l) => Column(children: [
+        Text(v,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-      ],
-    );
-  }
+        Text(l, style: const TextStyle(fontSize: 11, color: Colors.grey))
+      ]);
 
-  Widget _infoTile(BuildContext context, IconData icon, Color color,
-      String title, String value) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 10),
-          Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 4),
-          Text(value,
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        ],
+  Widget _healthCard(BuildContext ctx,
+      {required IconData icon,
+      required Color color,
+      required String title,
+      required String value,
+      VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Theme.of(ctx).cardColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const Spacer(),
+            Text(title,
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 2),
+            Text(value,
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis),
+          ],
+        ),
       ),
     );
   }

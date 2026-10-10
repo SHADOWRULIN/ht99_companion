@@ -7,12 +7,16 @@ import 'mtk_protocol.dart';
 class WatchBleService {
   static const MethodChannel _ctsChannel =
       MethodChannel("com.ht99.companion/cts");
+  static const MethodChannel _phoneChannel =
+      MethodChannel("com.ht99.companion/phone");
+  static const MethodChannel _notifChannel =
+      MethodChannel("com.ht99.companion/notifications");
 
   BluetoothDevice? device;
-  BluetoothCharacteristic? writeChar; // 0x2AA1
-  BluetoothCharacteristic? notifyChar; // 0x2AA0 or 0x2ABC
-  BluetoothCharacteristic? alertChar; // 0x2A06
-  BluetoothCharacteristic? batteryChar; // 0x2A19
+  BluetoothCharacteristic? writeChar;
+  BluetoothCharacteristic? notifyChar;
+  BluetoothCharacteristic? alertChar;
+  BluetoothCharacteristic? batteryChar;
 
   StreamSubscription? _scanSub;
   final List<StreamSubscription> _notifySubs = [];
@@ -22,10 +26,35 @@ class WatchBleService {
 
   bool isConnecting = false;
   bool isConnected = false;
+  bool isPhoneRinging = false;
+
+  final Set<String> enabledPackages = {
+    "com.whatsapp",
+    "com.facebook.katana",
+    "com.instagram.android",
+    "com.twitter.android",
+    "com.google.android.apps.messaging",
+  };
 
   void Function(String)? onStatus;
   void Function()? onData;
   void Function()? onConnected;
+  void Function()? onFindPhoneTriggered;
+
+  WatchBleService() {
+    _notifChannel.setMethodCallHandler((call) async {
+      if (call.method == "onNotificationReceived") {
+        final Map args = call.arguments as Map;
+        final String pkg = args["package"] ?? "";
+        final String title = args["title"] ?? "";
+        final String body = args["body"] ?? "";
+
+        if (enabledPackages.contains(pkg) && isConnected) {
+          pushNotification(title, body);
+        }
+      }
+    });
+  }
 
   void log(String msg) {
     String ts = DateTime.now().toIso8601String().substring(11, 19);
@@ -35,13 +64,9 @@ class WatchBleService {
   }
 
   Future<void> scanAndConnect() async {
-    if (isConnecting || isConnected) {
-      log("Connection in progress or already connected. Skipping duplicate scan.");
-      return;
-    }
+    if (isConnecting || isConnected) return;
     isConnecting = true;
 
-    log("Ensuring CTS GATT Server...");
     try {
       await _ctsChannel.invokeMethod("startCtsServer");
     } catch (_) {}
@@ -53,7 +78,6 @@ class WatchBleService {
       await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
     } catch (e) {
       log("Scan error: $e");
-      onStatus?.call("Scan error: $e");
       isConnecting = false;
       return;
     }
@@ -70,8 +94,6 @@ class WatchBleService {
             mac.contains("D0:CC")) {
           log("Acquired target: $name [$mac]");
           onStatus?.call("Found HT99. Binding...");
-
-          // Stop scan immediately to prevent duplicate connect events
           await stopScan();
           await _bind(r.device);
           break;
@@ -91,10 +113,7 @@ class WatchBleService {
   Future<void> _bind(BluetoothDevice target) async {
     try {
       await target.connect(
-        license: License.nonprofit,
-        autoConnect: false,
-        mtu: 256,
-      );
+          license: License.nonprofit, autoConnect: false, mtu: 256);
       device = target;
       isConnected = true;
       isConnecting = false;
@@ -132,17 +151,17 @@ class WatchBleService {
       onStatus?.call("Connected & Initialized");
       onConnected?.call();
 
-      // 1. Send WWfit Identification Handshake (turns watch icon BLUE and stops disconnects)
+      // 1. Send WWfit Handshake (Turns watch icon BLUE)
       for (var frame in MtkProtocol.buildWwfitHandshake()) {
         await writeRaw(frame);
         await Future.delayed(const Duration(milliseconds: 25));
       }
 
-      // 2. Sync Phone Time and 12-Hour format
-      await syncClock(telemetry.is12Hour);
+      // 2. Automatically sync time in 12-Hour format immediately
+      await autoSyncTime12Hour();
 
-      // 3. Query initial telemetry
-      await queryPedometer();
+      // 3. Query initial health stats & battery
+      await queryAllHealthData();
       await readSigBattery();
     } catch (e) {
       log("Bind error: $e");
@@ -157,58 +176,111 @@ class WatchBleService {
     String hex = data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
     log("RX [$uuid]: $hex");
 
-    // Standard KCT health response (Header 0xAB)
-    if (data[0] == 0xAB && data.length >= 4) {
-      int cmd = data[2];
-      if (cmd == 0x91 || cmd == 0x08) {
-        telemetry.batteryLevel = data[3].clamp(0, 100);
-        log("Telemetry: Battery = ${telemetry.batteryLevel}%");
+    String text = String.fromCharCodes(data.where((b) => b >= 32 && b <= 126));
+
+    // Watch searches for phone (Find Phone trigger from watch)
+    if (text.contains("10,4,1")) {
+      log("WATCH TRIGGERED FIND PHONE!");
+      triggerFindPhoneAlarm();
+      return;
+    }
+    if (text.contains("10,4,0")) {
+      log("Watch cancelled Find Phone.");
+      stopFindPhoneAlarm();
+      return;
+    }
+
+    // Health parsing (WWfit format)
+    if (text.contains("01,1")) {
+      List<String> p = text.split(",");
+      if (p.length >= 4) {
+        telemetry.steps = int.tryParse(p[2]) ?? telemetry.steps;
+        telemetry.calories =
+            int.tryParse(p[3]) ?? (telemetry.steps * 0.04).round();
+        telemetry.distanceKm = telemetry.steps * 0.00075;
+        log("Steps synced: ${telemetry.steps}");
         onData?.call();
-      } else if (cmd == 0x51 && data.length >= 7) {
-        telemetry.steps = (data[4] << 16) | (data[5] << 8) | data[6];
-        telemetry.calories = (telemetry.steps * 0.04).round();
-        telemetry.distanceKm = (telemetry.steps * 0.00075);
-        log("Telemetry: Steps = ${telemetry.steps}");
+      }
+    } else if (text.contains("03,1")) {
+      List<String> p = text.split(",");
+      if (p.length >= 3) {
+        telemetry.heartRate = int.tryParse(p[2]) ?? telemetry.heartRate;
+        log("Heart rate synced: ${telemetry.heartRate} BPM");
         onData?.call();
-      } else if (cmd == 0x82 && data.length >= 4) {
-        telemetry.heartRate = data[3];
-        log("Telemetry: HeartRate = ${telemetry.heartRate} BPM");
+      }
+    } else if (text.contains("04,1")) {
+      List<String> p = text.split(",");
+      if (p.length >= 4) {
+        telemetry.systolicBp = int.tryParse(p[2]) ?? 120;
+        telemetry.diastolicBp = int.tryParse(p[3]) ?? 80;
+        log("BP synced: ${telemetry.systolicBp}/${telemetry.diastolicBp}");
+        onData?.call();
+      }
+    } else if (text.contains("11,1")) {
+      List<String> p = text.split(",");
+      if (p.length >= 3) {
+        telemetry.bodyTemp = double.tryParse(p[2]) ?? 36.5;
+        log("Temp synced: ${telemetry.bodyTemp}°C");
         onData?.call();
       }
     }
 
-    // ASCII string telemetry
-    String text = String.fromCharCodes(data.where((b) => b >= 32 && b <= 126));
-    if (text.contains("ios indication")) {
-      log("CTS Verification requested. Re-broadcasting time...");
-      syncClock(telemetry.is12Hour);
+    // Fallback KCT health packet parser
+    if (data[0] == 0xAB && data.length >= 4) {
+      int cmd = data[2];
+      if (cmd == 0x91 || cmd == 0x08) {
+        telemetry.batteryLevel = data[3].clamp(0, 100);
+        onData?.call();
+      } else if (cmd == 0x51 && data.length >= 7) {
+        telemetry.steps = (data[4] << 16) | (data[5] << 8) | data[6];
+        telemetry.calories = (telemetry.steps * 0.04).round();
+        telemetry.distanceKm = telemetry.steps * 0.00075;
+        onData?.call();
+      } else if (cmd == 0x82 && data.length >= 4) {
+        telemetry.heartRate = data[3];
+        onData?.call();
+      }
     }
   }
 
-  Future<void> syncClock(bool is12Hour) async {
-    telemetry.is12Hour = is12Hour;
-
-    // 1. Android CTS Native Server broadcast
-    try {
-      await _ctsChannel.invokeMethod("broadcastCtsTime");
-      await _ctsChannel.invokeMethod("setTimeFormat", {"is12Hour": is12Hour});
-    } catch (_) {}
-
-    // 2. Set watch RTC clock via KCT time packet
-    await writeRaw(MtkProtocol.buildKctTimePacket(DateTime.now()));
-    await Future.delayed(const Duration(milliseconds: 30));
-
-    // 3. Set watch 12h/24h toggle via WWfit SET,40 command
-    await writeRaw(MtkProtocol.buildTimeFormatCmd(is12Hour));
-    log("Dispatched Time Sync (12h=$is12Hour)");
+  void triggerFindPhoneAlarm() {
+    isPhoneRinging = true;
+    _phoneChannel.invokeMethod("startAlarm");
+    onFindPhoneTriggered?.call();
     onData?.call();
   }
 
-  Future<void> queryPedometer() async {
-    await writeRaw(MtkProtocol.buildPedometerQuery());
+  void stopFindPhoneAlarm() {
+    isPhoneRinging = false;
+    _phoneChannel.invokeMethod("stopAlarm");
+    writeRaw(MtkProtocol.stopFindPhone());
+    onData?.call();
+  }
+
+  Future<void> autoSyncTime12Hour() async {
+    try {
+      await _ctsChannel.invokeMethod("broadcastCtsTime");
+      await _ctsChannel.invokeMethod("setTimeFormat", {"is12Hour": true});
+    } catch (_) {}
+
+    await writeRaw(MtkProtocol.buildKctTimePacket(DateTime.now()));
     await Future.delayed(const Duration(milliseconds: 30));
-    await writeRaw(MtkProtocol.buildKctStepQuery());
-    log("Dispatched pedometer query");
+    await writeRaw(MtkProtocol.build12HourFormatCmd());
+    log("Auto-synced time in 12-Hour format");
+    onData?.call();
+  }
+
+  Future<void> queryAllHealthData() async {
+    await writeRaw(MtkProtocol.querySteps());
+    await Future.delayed(const Duration(milliseconds: 40));
+    await writeRaw(MtkProtocol.queryHeartRate());
+    await Future.delayed(const Duration(milliseconds: 40));
+    await writeRaw(MtkProtocol.queryBloodPressure());
+    await Future.delayed(const Duration(milliseconds: 40));
+    await writeRaw(MtkProtocol.queryThermometer());
+    await Future.delayed(const Duration(milliseconds: 40));
+    await writeRaw(MtkProtocol.querySleep());
+    log("Queried full health telemetry suite");
   }
 
   Future<void> readSigBattery() async {
@@ -222,7 +294,6 @@ class WatchBleService {
         }
       } catch (_) {}
     }
-    await writeRaw(MtkProtocol.buildBatteryQuery());
   }
 
   Future<void> ringWatch() async {
@@ -237,14 +308,14 @@ class WatchBleService {
 
   Future<void> pushNotification(String title, String body) async {
     await writeRaw(MtkProtocol.buildNotificationPacket(title, body));
-    log("Dispatched Notification: $title");
+    log("Pushed Notification: $title - $body");
   }
 
   Future<void> pushWeather(
       int tempC, int conditionCode, int highC, int lowC) async {
     await writeRaw(
         MtkProtocol.buildWeatherPacket(tempC, conditionCode, highC, lowC));
-    log("Dispatched Weather: $tempC°C (High: $highC, Low: $lowC)");
+    log("Dispatched Weather: $tempC°C");
   }
 
   Future<bool> writeRaw(List<int> bytes) async {
@@ -253,20 +324,14 @@ class WatchBleService {
 
     try {
       if (bytes.length <= chunkSize) {
-        await writeChar!.write(
-          bytes,
-          withoutResponse: writeChar!.properties.writeWithoutResponse,
-        );
+        await writeChar!.write(bytes,
+            withoutResponse: writeChar!.properties.writeWithoutResponse);
         return true;
       }
-
       for (int i = 0; i < bytes.length; i += chunkSize) {
         int end = (i + chunkSize < bytes.length) ? i + chunkSize : bytes.length;
-        List<int> chunk = bytes.sublist(i, end);
-        await writeChar!.write(
-          chunk,
-          withoutResponse: writeChar!.properties.writeWithoutResponse,
-        );
+        await writeChar!.write(bytes.sublist(i, end),
+            withoutResponse: writeChar!.properties.writeWithoutResponse);
         await Future.delayed(const Duration(milliseconds: 18));
       }
       return true;

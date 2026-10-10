@@ -3,8 +3,8 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'services/watch_ble_service.dart';
 import 'ui/home_tab.dart';
 import 'ui/device_tab.dart';
+import 'ui/my_tab.dart';
 import 'ui/terminal_tab.dart';
-import 'ui/settings_tab.dart';
 
 void main() {
   runApp(const Ht99MasterApp());
@@ -33,11 +33,44 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
     FlutterBluePlus.adapterState.listen((state) {
       setState(() => _adapterState = state);
     });
+
+    _ble.onFindPhoneTriggered = () {
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF1E1E2C),
+            title: const Row(
+              children: [
+                Icon(Icons.ring_volume_rounded,
+                    color: Color(0xFFFF5722), size: 30),
+                SizedBox(width: 10),
+                Text("Watch Finding Phone!"),
+              ],
+            ),
+            content: const Text(
+                "Your HT99 watch is triggering this phone to ring and vibrate."),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  _ble.stopFindPhoneAlarm();
+                  Navigator.pop(ctx);
+                },
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF5722),
+                    foregroundColor: Colors.white),
+                child: const Text("Stop Ringing"),
+              ),
+            ],
+          ),
+        );
+      }
+    };
   }
 
   void _showScanModal() {
     if (_ble.isConnecting || _ble.isConnected) return;
-
     _ble.scanAndConnect();
 
     showDialog(
@@ -121,9 +154,8 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
                           color: Colors.redAccent),
                       const SizedBox(width: 8),
                       const Expanded(
-                        child: Text("Bluetooth is turned off.",
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
+                          child: Text("Bluetooth is turned off.",
+                              style: TextStyle(fontWeight: FontWeight.bold))),
                       ElevatedButton(
                         onPressed: () => FlutterBluePlus.turnOn(),
                         child: const Text("Turn On"),
@@ -137,7 +169,7 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
                   children: [
                     HomeTab(ble: _ble, stepGoal: _stepGoal),
                     DeviceTab(ble: _ble, onConnectTrigger: _showScanModal),
-                    SettingsTab(
+                    MyTab(
                       currentTheme: _themeMode,
                       onThemeChange: (m) => setState(() => _themeMode = m),
                       stepGoal: _stepGoal,
@@ -159,7 +191,7 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
             NavigationDestination(
                 icon: Icon(Icons.watch_rounded), label: "Device"),
             NavigationDestination(
-                icon: Icon(Icons.settings_rounded), label: "Settings"),
+                icon: Icon(Icons.person_rounded), label: "My"),
             NavigationDestination(
                 icon: Icon(Icons.terminal_rounded), label: "Terminal"),
           ],

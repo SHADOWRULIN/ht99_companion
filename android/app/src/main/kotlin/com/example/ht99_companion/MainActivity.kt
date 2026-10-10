@@ -4,8 +4,14 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.*
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.Ringtone
+import android.media.RingtoneManager
 import android.os.Build
+import android.os.Vibrator
+import android.provider.Settings
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -13,32 +19,31 @@ import io.flutter.plugin.common.MethodChannel
 import java.util.*
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "com.ht99.companion/cts"
+    private val CHANNEL_CTS = "com.ht99.companion/cts"
+    private val CHANNEL_PHONE = "com.ht99.companion/phone"
     private var gattServer: BluetoothGattServer? = null
+    private var ringtone: Ringtone? = null
+    private var vibrator: Vibrator? = null
 
-    // Bluetooth SIG CTS (0x1805)
     private val CTS_SERVICE = UUID.fromString("00001805-0000-1000-8000-00805f9b34fb")
     private val CHAR_CURRENT_TIME = UUID.fromString("00002a2b-0000-1000-8000-00805f9b34fb")
     private val CHAR_LOCAL_TIME = UUID.fromString("00002a0f-0000-1000-8000-00805f9b34fb")
     private val CHAR_REF_TIME = UUID.fromString("00002a14-0000-1000-8000-00805f9b34fb")
     private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-    // MediaTek Time Format Service (0x1902) from leprofiles.c & timeformat.b
     private val TIME_FORMAT_SERVICE = UUID.fromString("00001902-0000-1000-8000-00805f9b34fb")
     private val CHAR_TIME_FORMAT = UUID.fromString("00002b01-0000-1000-8000-00805f9b34fb")
 
-    // 0 = 12-Hour format, 1 = 24-Hour format
+    // Default to 12-Hour mode (0 = 12h, 1 = 24h)
     private var is24HourMode: Byte = 0
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+        // CTS & Time Format Channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_CTS).setMethodCallHandler { call, result ->
             when (call.method) {
-                "startCtsServer" -> {
-                    val ok = startCtsGattServer()
-                    result.success(ok)
-                }
+                "startCtsServer" -> result.success(startCtsGattServer())
                 "broadcastCtsTime" -> {
                     notifyCurrentTime()
                     result.success(true)
@@ -52,6 +57,60 @@ class MainActivity: FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        // Phone Alert & System Notification Listener Channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_PHONE).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "startAlarm" -> {
+                    startPhoneAlarm()
+                    result.success(true)
+                }
+                "stopAlarm" -> {
+                    stopPhoneAlarm()
+                    result.success(true)
+                }
+                "openNotificationSettings" -> {
+                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    result.success(true)
+                }
+                "isNotificationListenerEnabled" -> {
+                    val pkgName = packageName
+                    val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+                    result.success(flat != null && flat.contains(pkgName))
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        Ht99NotificationListener.flutterChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.ht99.companion/notifications")
+    }
+
+    private fun startPhoneAlarm() {
+        try {
+            if (ringtone == null) {
+                val alertUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ringtone = RingtoneManager.getRingtone(applicationContext, alertUri)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    ringtone?.audioAttributes = AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                }
+            }
+            ringtone?.play()
+
+            vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            val pattern = longArrayOf(0, 800, 400, 800)
+            vibrator?.vibrate(pattern, 0)
+        } catch (_: Exception) {}
+    }
+
+    private fun stopPhoneAlarm() {
+        try {
+            ringtone?.stop()
+            vibrator?.cancel()
+        } catch (_: Exception) {}
     }
 
     @SuppressLint("MissingPermission")
@@ -81,51 +140,23 @@ class MainActivity: FlutterActivity() {
                         else -> gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE, offset, null)
                     }
                 }
-
-                override fun onDescriptorWriteRequest(
-                    device: BluetoothDevice?,
-                    requestId: Int,
-                    descriptor: BluetoothGattDescriptor?,
-                    preparedWrite: Boolean,
-                    responseNeeded: Boolean,
-                    offset: Int,
-                    value: ByteArray?
-                ) {
-                    super.onDescriptorWriteRequest(device, requestId, descriptor, preparedWrite, responseNeeded, offset, value)
-                    if (responseNeeded) {
-                        gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
-                    }
-                }
             })
 
-            // 1. Register Current Time Service (0x1805)
             val ctsService = BluetoothGattService(CTS_SERVICE, BluetoothGattService.SERVICE_TYPE_PRIMARY)
-
             val timeChar = BluetoothGattCharacteristic(
                 CHAR_CURRENT_TIME,
                 BluetoothGattCharacteristic.PROPERTY_READ or BluetoothGattCharacteristic.PROPERTY_NOTIFY,
                 BluetoothGattCharacteristic.PERMISSION_READ
             )
             timeChar.addDescriptor(BluetoothGattDescriptor(CCCD_UUID, BluetoothGattDescriptor.PERMISSION_WRITE or BluetoothGattDescriptor.PERMISSION_READ))
-
-            val localChar = BluetoothGattCharacteristic(
-                CHAR_LOCAL_TIME,
-                BluetoothGattCharacteristic.PROPERTY_READ,
-                BluetoothGattCharacteristic.PERMISSION_READ
-            )
-
-            val refChar = BluetoothGattCharacteristic(
-                CHAR_REF_TIME,
-                BluetoothGattCharacteristic.PROPERTY_READ,
-                BluetoothGattCharacteristic.PERMISSION_READ
-            )
+            val localChar = BluetoothGattCharacteristic(CHAR_LOCAL_TIME, BluetoothGattCharacteristic.PROPERTY_READ, BluetoothGattCharacteristic.PERMISSION_READ)
+            val refChar = BluetoothGattCharacteristic(CHAR_REF_TIME, BluetoothGattCharacteristic.PROPERTY_READ, BluetoothGattCharacteristic.PERMISSION_READ)
 
             ctsService.addCharacteristic(timeChar)
             ctsService.addCharacteristic(localChar)
             ctsService.addCharacteristic(refChar)
             gattServer?.addService(ctsService)
 
-            // 2. Register MediaTek Time Format Service (0x1902)
             val tfService = BluetoothGattService(TIME_FORMAT_SERVICE, BluetoothGattService.SERVICE_TYPE_PRIMARY)
             val tfChar = BluetoothGattCharacteristic(
                 CHAR_TIME_FORMAT,
@@ -207,6 +238,7 @@ class MainActivity: FlutterActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopPhoneAlarm()
         try { gattServer?.close() } catch (_: Exception) {}
     }
 }
