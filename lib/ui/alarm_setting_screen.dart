@@ -14,15 +14,7 @@ class AlarmSettingScreen extends StatefulWidget {
 class _AlarmSettingScreenState extends State<AlarmSettingScreen> {
   int _selectedHour = 7;
   int _selectedMinute = 0;
-  final List<bool> _days = [
-    false,
-    true,
-    true,
-    true,
-    true,
-    true,
-    false
-  ]; // Mon-Fri default
+  final List<bool> _days = [false, true, true, true, true, true, false];
   final List<String> _dayNames = [
     "SUN",
     "MON",
@@ -62,7 +54,7 @@ class _AlarmSettingScreenState extends State<AlarmSettingScreen> {
                       Navigator.pop(ctx);
                     },
                     child: const Text("save",
-                        style: TextStyle(color: Color(0xFFFF5722))),
+                        style: TextStyle(color: Color(0xFFF5BE53))),
                   ),
                 ],
               ),
@@ -101,7 +93,7 @@ class _AlarmSettingScreenState extends State<AlarmSettingScreen> {
                     label: Text(_dayNames[i],
                         style: const TextStyle(fontSize: 10)),
                     selected: _days[i],
-                    selectedColor: const Color(0xFFFF5722),
+                    selectedColor: const Color(0xFFF5BE53),
                     onSelected: (val) => setModal(() => _days[i] = val),
                   );
                 }),

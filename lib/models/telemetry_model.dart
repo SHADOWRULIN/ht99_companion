@@ -24,7 +24,7 @@ class TelemetryModel {
   int calories;
   double distanceKm;
   int heartRate;
-  int batteryLevel; // -1 indicates loading state
+  int batteryLevel; // -1 represents loading state to prevent the initial 25% bug
   int systolicBp;
   int diastolicBp;
   double bodyTemp;
@@ -42,7 +42,7 @@ class TelemetryModel {
     this.calories = 0,
     this.distanceKm = 0.0,
     this.heartRate = 0,
-    this.batteryLevel = -1, // Sits in loading state until verified
+    this.batteryLevel = -1,
     this.systolicBp = 0,
     this.diastolicBp = 0,
     this.bodyTemp = 0.0,

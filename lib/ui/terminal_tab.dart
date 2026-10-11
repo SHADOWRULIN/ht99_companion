@@ -37,7 +37,7 @@ class TerminalTab extends StatelessWidget {
                     icon: const Icon(Icons.copy_rounded, size: 16),
                     label: const Text("Copy All"),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00E5FF),
+                      backgroundColor: const Color(0xFFF5BE53),
                       foregroundColor: Colors.black,
                     ),
                   ),
@@ -72,8 +72,9 @@ class TerminalTab extends StatelessWidget {
                             ? const Color(0xFF00E5FF)
                             : (line.contains("error") || line.contains("fail")
                                 ? Colors.redAccent
-                                : (line.contains("Dispatched")
-                                    ? Colors.amberAccent
+                                : (line.contains("Dispatched") ||
+                                        line.contains("Auto-synced")
+                                    ? const Color(0xFFF5BE53)
                                     : Colors.white70));
                         return Text(
                           line,

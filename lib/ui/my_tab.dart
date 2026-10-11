@@ -54,12 +54,8 @@ class MyTab extends StatelessWidget {
         const Center(
           child: CircleAvatar(
             radius: 36,
-            backgroundColor: Color(0xFFFF5722),
-            child: Text("HT",
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold)),
+            backgroundColor: Color(0xFFF5BE53),
+            child: Icon(Icons.apple, color: Colors.black, size: 40),
           ),
         ),
         const SizedBox(height: 24),
@@ -72,9 +68,9 @@ class MyTab extends StatelessWidget {
             children: [
               ListTile(
                 leading: const CircleAvatar(
-                    backgroundColor: Color(0x22FF5722),
+                    backgroundColor: Color(0x22F5BE53),
                     child:
-                        Icon(Icons.directions_walk, color: Color(0xFFFF5722))),
+                        Icon(Icons.directions_walk, color: Color(0xFFF5BE53))),
                 title: const Text("Step target"),
                 subtitle: Text("$stepGoal step"),
                 onTap: () => _showStepPicker(context),
@@ -116,7 +112,7 @@ class MyTab extends StatelessWidget {
               const ListTile(
                 leading: Icon(Icons.info_outline),
                 title: Text("About us"),
-                subtitle: Text("HT99 Companion Pro v2.0"),
+                subtitle: Text("Apple Watch HT99 Companion v2.0"),
               ),
             ],
           ),

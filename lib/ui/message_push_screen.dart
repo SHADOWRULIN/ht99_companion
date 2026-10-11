@@ -77,7 +77,7 @@ class _MessagePushScreenState extends State<MessagePushScreen>
         title: const Text("Message push"),
         bottom: TabBar(
           controller: _tabCtrl,
-          indicatorColor: const Color(0xFFFF5722),
+          indicatorColor: const Color(0xFFF5BE53),
           tabs: const [
             Tab(text: "Personal app"),
             Tab(text: "System app"),
@@ -106,7 +106,7 @@ class _MessagePushScreenState extends State<MessagePushScreen>
         return SwitchListTile(
           title: Text(name),
           value: isEnabled,
-          activeColor: const Color(0xFFFF5722),
+          activeColor: const Color(0xFFF5BE53),
           onChanged: (val) {
             setState(() {
               if (val) {

@@ -16,7 +16,7 @@ class HealthDetailScreen extends StatelessWidget {
           if (type == "HeartRate" && ble.isConnected)
             IconButton(
               icon: const Icon(Icons.play_arrow_rounded,
-                  color: Color(0xFFFF5722)),
+                  color: Color(0xFFF5BE53)),
               onPressed: () => ble.measureHeartRateLive(),
               tooltip: "Measure Now",
             ),
@@ -125,7 +125,7 @@ class HealthDetailScreen extends StatelessWidget {
                   ? Icons.thermostat
                   : Icons.nightlight_round),
           size: 64,
-          color: const Color(0xFFFF5722),
+          color: const Color(0xFFF5BE53),
         ),
         const SizedBox(height: 20),
         Text(

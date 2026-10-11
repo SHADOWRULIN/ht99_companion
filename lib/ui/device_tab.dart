@@ -22,7 +22,6 @@ class DeviceTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        // Apple Watch Device Banner (Neutral Earth Slate + Gold)
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(

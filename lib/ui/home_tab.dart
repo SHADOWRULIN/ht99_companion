@@ -21,7 +21,7 @@ class HomeTab extends StatelessWidget {
             const Text("Home",
                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
             IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: Color(0xFFFF5722)),
+              icon: const Icon(Icons.refresh_rounded, color: Color(0xFFF5BE53)),
               onPressed:
                   ble.isConnected ? () => ble.queryAllHealthData() : null,
               tooltip: "Refresh Health Data",
@@ -29,8 +29,6 @@ class HomeTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-
-        // Steps Arc
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
@@ -53,7 +51,7 @@ class HomeTab extends StatelessWidget {
                       value: progress == 0 ? 0.05 : progress,
                       strokeWidth: 14,
                       backgroundColor: Colors.white12,
-                      color: const Color(0xFFFF5722),
+                      color: const Color(0xFFF5BE53),
                       strokeCap: StrokeCap.round,
                     ),
                   ),
@@ -75,15 +73,13 @@ class HomeTab extends StatelessWidget {
                 children: [
                   _stat("${(progress * 100).toInt()}%", "Percent"),
                   _stat("${ble.telemetry.calories}", "kcal"),
-                  _stat(ble.telemetry.distanceKm.toStringAsFixed(2), "km"),
+                  _stat("${ble.telemetry.distanceKm.toStringAsFixed(2)}", "km"),
                 ],
               ),
             ],
           ),
         ),
-
         const SizedBox(height: 16),
-
         GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,

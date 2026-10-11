@@ -174,10 +174,9 @@ class WatchBleService {
     String hex = data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
     log("RX [$uuid]: $hex");
 
-    // Standard Bluetooth SIG Heart Rate (0x2A37)
+    // Standard Heart Rate Characteristic (0x2A37)
     if (uuid.contains("2a37") && data.length >= 2) {
-      int bpm = data[1];
-      _recordHeartRate(bpm);
+      _recordHeartRate(data[1]);
     }
 
     String text = String.fromCharCodes(data.where((b) => b >= 32 && b <= 126));
@@ -246,13 +245,13 @@ class WatchBleService {
     String timeStr = DateTime.now().toIso8601String().substring(11, 16);
     telemetry.hrHistory.insert(0, HeartRateRecord(bpm: bpm, time: timeStr));
     if (telemetry.hrHistory.length > 50) telemetry.hrHistory.removeLast();
-    log("Heart Rate Recorded: $bpm BPM at $timeStr");
+    log("Heart Rate: $bpm BPM at $timeStr");
     onData?.call();
   }
 
   Future<void> measureHeartRateLive() async {
     await writeRaw(MtkProtocol.triggerHeartRateMeasure());
-    log("Dispatched live Heart Rate measurement command");
+    log("Dispatched live Heart Rate measure command");
   }
 
   void triggerFindPhoneAlarm() {

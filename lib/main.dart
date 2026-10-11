@@ -10,7 +10,6 @@ void main() {
   runApp(const AppleWatchManagerApp());
 }
 
-// Neutral Earth Tones Palette
 class EarthColors {
   static const Color ochreGold = Color(0xFFF5BE53);
   static const Color mutedSage = Color(0xFFC5D1CB);
@@ -142,8 +141,6 @@ class _AppleWatchManagerAppState extends State<AppleWatchManagerApp> {
       title: "Apple",
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
-
-      // Light Theme (Earth Tones: Cream, Sage, and Gold)
       theme: ThemeData(
         brightness: Brightness.light,
         scaffoldBackgroundColor: EarthColors.softCream,
@@ -161,8 +158,6 @@ class _AppleWatchManagerAppState extends State<AppleWatchManagerApp> {
         ),
         useMaterial3: true,
       ),
-
-      // Dark Theme (Earth Tones: Charcoal, Slate, and Gold)
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: EarthColors.darkCharcoal,
@@ -180,7 +175,6 @@ class _AppleWatchManagerAppState extends State<AppleWatchManagerApp> {
         ),
         useMaterial3: true,
       ),
-
       home: Scaffold(
         body: SafeArea(
           child: Column(

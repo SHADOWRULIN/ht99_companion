@@ -93,7 +93,7 @@ class _DrinkWaterScreenState extends State<DrinkWaterScreen> {
               title: Text(timeSlots[i],
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               value: slotToggles[i],
-              activeColor: const Color(0xFFFF5722),
+              activeColor: const Color(0xFFF5BE53),
               onChanged: (val) {
                 setState(() => slotToggles[i] = val);
                 widget.ble.setDrinkWaterReminder(

@@ -34,13 +34,11 @@ class MainActivity: FlutterActivity() {
     private val TIME_FORMAT_SERVICE = UUID.fromString("00001902-0000-1000-8000-00805f9b34fb")
     private val CHAR_TIME_FORMAT = UUID.fromString("00002b01-0000-1000-8000-00805f9b34fb")
 
-    // Default to 12-Hour mode (0 = 12h, 1 = 24h)
-    private var is24HourMode: Byte = 0
+    private var is24HourMode: Byte = 0 // 0 = 12h, 1 = 24h
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // CTS & Time Format Channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_CTS).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startCtsServer" -> result.success(startCtsGattServer())
@@ -58,7 +56,6 @@ class MainActivity: FlutterActivity() {
             }
         }
 
-        // Phone Alert & System Notification Listener Channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_PHONE).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startAlarm" -> {

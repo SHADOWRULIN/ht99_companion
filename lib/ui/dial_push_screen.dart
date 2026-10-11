@@ -35,14 +35,17 @@ class _DialPushScreenState extends State<DialPushScreen>
 
   void _pushDial() async {
     setState(() => _isUploading = true);
-    List<int> sampleDat = List.filled(500, 0x1A);
-    await _dialService.sendDialDat(sampleDat, (p) {
+
+    // Pushes the genuine 320x385 MTK2502 binary instead of placeholder bytes
+    bool success = await _dialService.pushPresetDial("assets/004012.dat", (p) {
       setState(() => _uploadProgress = p);
     });
+
     setState(() => _isUploading = false);
-    if (mounted) {
+    if (mounted && success) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Dial successfully transferred!")));
+        const SnackBar(content: Text("Watch face installed successfully!")),
+      );
     }
   }
 
@@ -53,7 +56,7 @@ class _DialPushScreenState extends State<DialPushScreen>
         title: const Text("Dial push"),
         bottom: TabBar(
           controller: _tabCtrl,
-          indicatorColor: const Color(0xFFFF5722),
+          indicatorColor: const Color(0xFFF5BE53),
           tabs: const [
             Tab(text: "dial push"),
             Tab(text: "custom dial"),
@@ -66,7 +69,7 @@ class _DialPushScreenState extends State<DialPushScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   CircularProgressIndicator(
-                      value: _uploadProgress, color: const Color(0xFFFF5722)),
+                      value: _uploadProgress, color: const Color(0xFFF5BE53)),
                   const SizedBox(height: 16),
                   Text(
                       "${(_uploadProgress * 100).toInt()}% Uploading dial to watch..."),
@@ -117,8 +120,8 @@ class _DialPushScreenState extends State<DialPushScreen>
               child: ElevatedButton(
                 onPressed: widget.ble.isConnected ? _pushDial : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF5722),
-                  foregroundColor: Colors.white,
+                  backgroundColor: const Color(0xFFF5BE53),
+                  foregroundColor: Colors.black,
                   padding: EdgeInsets.zero,
                 ),
                 child: const Text("SEND", style: TextStyle(fontSize: 11)),
@@ -182,8 +185,8 @@ class _DialPushScreenState extends State<DialPushScreen>
         ElevatedButton(
           onPressed: widget.ble.isConnected ? _pushDial : null,
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFFF5722),
-            foregroundColor: Colors.white,
+            backgroundColor: const Color(0xFFF5BE53),
+            foregroundColor: Colors.black,
             minimumSize: const Size.fromHeight(48),
           ),
           child: const Text("Send"),

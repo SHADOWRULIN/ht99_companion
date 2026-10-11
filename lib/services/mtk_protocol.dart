@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 class MtkProtocol {
-  // 1. Initial Handshake Packets (Turns watch icon BLUE)
+  // 1. Initial Handshake Packets (Turns watch status icon BLUE and resets disconnect watchdog)
   static List<List<int>> buildWwfitHandshake() {
     const commands = ["01,1", "03,1", "04,1", "05,1", "11,1"];
     return commands.map((cmd) => buildWwfitCmd(cmd)).toList();
@@ -32,10 +32,10 @@ class MtkProtocol {
   // 4. Force 12-Hour Mode (SET,40,0)
   static List<int> build12HourFormatCmd() => buildWwfitCmd("SET,40,0");
 
-  // 5. Trigger Real-Time Heart Rate Measurement on Watch
+  // 5. Trigger Real-Time Heart Rate Sensor Measurement on Watch
   static List<int> triggerHeartRateMeasure() => [0xAB, 0x00, 0x82, 0x01];
 
-  // 6. Query Health Sensors
+  // 6. Query Health Telemetry Suite
   static List<int> querySteps() => buildWwfitCmd("01,1");
   static List<int> queryHeartRate() => buildWwfitCmd("03,1");
   static List<int> queryBloodPressure() => buildWwfitCmd("04,1");
@@ -43,7 +43,7 @@ class MtkProtocol {
   static List<int> queryThermometer() => buildWwfitCmd("11,1");
   static List<int> querySleep() => buildWwfitCmd("02,1");
 
-  // 7. Watch Alarm Setting
+  // 7. Watch Alarm Packet
   static List<int> buildSetAlarmPacket(
       int hour, int minute, int repeatMask, bool enabled) {
     return [
@@ -57,7 +57,7 @@ class MtkProtocol {
     ];
   }
 
-  // 8. Drink Water Reminder Interval
+  // 8. Drink Water Reminder Interval Packet
   static List<int> buildDrinkWaterPacket(bool enabled, int intervalMinutes) {
     return [
       0xAB,
@@ -71,7 +71,7 @@ class MtkProtocol {
   // 9. Stop Find Phone Acknowledgment
   static List<int> stopFindPhone() => buildWwfitCmd("10,4,0");
 
-  // 10. Find Watch (Vibration Alert)
+  // 10. Find Watch (Immediate Alert)
   static List<int> buildFindWatch() => [0xAB, 0x00, 0x03, 0x01];
 
   // 11. Notification Packet
