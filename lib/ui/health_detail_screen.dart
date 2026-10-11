@@ -10,144 +10,137 @@ class HealthDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(type)),
+      appBar: AppBar(
+        title: Text(type),
+        actions: [
+          if (type == "HeartRate" && ble.isConnected)
+            IconButton(
+              icon: const Icon(Icons.play_arrow_rounded,
+                  color: Color(0xFFFF5722)),
+              onPressed: () => ble.measureHeartRateLive(),
+              tooltip: "Measure Now",
+            ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(height: 20),
-            if (type == "HeartRate") _buildHeartRateView(),
-            if (type == "BP") _buildBpView(),
-            if (type == "Thermometer") _buildThermometerView(),
-            if (type == "Sleep") _buildSleepView(),
-            if (type == "Immunity") _buildImmunityView(),
-          ],
-        ),
+        child: type == "HeartRate"
+            ? _buildHeartRateLayout()
+            : _buildGenericLayout(),
       ),
     );
   }
 
-  Widget _buildHeartRateView() {
+  Widget _buildHeartRateLayout() {
+    int current = ble.telemetry.heartRate;
+    int max = ble.telemetry.hrHistory.isEmpty
+        ? current
+        : ble.telemetry.hrHistory
+            .map((e) => e.bpm)
+            .reduce((a, b) => a > b ? a : b);
+    int min = ble.telemetry.hrHistory.isEmpty
+        ? current
+        : ble.telemetry.hrHistory
+            .map((e) => e.bpm)
+            .reduce((a, b) => a < b ? a : b);
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const Text("average heart rate", style: TextStyle(color: Colors.grey)),
         const SizedBox(height: 6),
-        Text("${ble.telemetry.heartRate} bpm",
+        Text("$current times / minutes",
             style: const TextStyle(
-                fontSize: 36,
+                fontSize: 32,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFFFF4757))),
-        const SizedBox(height: 30),
-        Container(
-          height: 150,
-          decoration: BoxDecoration(
-              color: Colors.white10, borderRadius: BorderRadius.circular(16)),
-          child: const Center(
-              child: Text("Heart Rate Record Chart",
-                  style: TextStyle(color: Colors.grey))),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBpView() {
-    return Column(
-      children: [
-        const Icon(Icons.water_drop_rounded, size: 64, color: Colors.redAccent),
         const SizedBox(height: 16),
-        Text("${ble.telemetry.systolicBp} / ${ble.telemetry.diastolicBp}",
-            style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold)),
-        const Text("systolic / diastolic (mmHg)",
-            style: TextStyle(color: Colors.grey)),
-        const SizedBox(height: 30),
-        const Text("blood pressure measurement record",
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        Text(
-            ble.telemetry.systolicBp > 0
-                ? "Normal Range"
-                : "no data temporarily",
-            style: const TextStyle(color: Colors.grey)),
-      ],
-    );
-  }
-
-  Widget _buildThermometerView() {
-    return Column(
-      children: [
-        const Text("latest body temperature",
-            style: TextStyle(color: Colors.grey)),
-        const SizedBox(height: 6),
-        Text("${ble.telemetry.bodyTemp} °C",
-            style: const TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: Colors.tealAccent)),
-        const SizedBox(height: 24),
-        Container(
-          height: 14,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(7),
-            gradient: const LinearGradient(colors: [
-              Colors.blue,
-              Colors.green,
-              Colors.yellow,
-              Colors.orange,
-              Colors.red
-            ]),
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            Text("hypothermia",
-                style: TextStyle(fontSize: 10, color: Colors.grey)),
-            Text("normal", style: TextStyle(fontSize: 10, color: Colors.grey)),
-            Text("low fever",
-                style: TextStyle(fontSize: 10, color: Colors.grey)),
-            Text("high heat",
-                style: TextStyle(fontSize: 10, color: Colors.grey)),
+            Column(
+              children: [
+                Text("$max bpm",
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.pinkAccent)),
+                const Text("maximum heart rate",
+                    style: TextStyle(color: Colors.grey, fontSize: 11)),
+              ],
+            ),
+            Column(
+              children: [
+                Text("$min bpm",
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.purpleAccent)),
+                const Text("minimum heart rate",
+                    style: TextStyle(color: Colors.grey, fontSize: 11)),
+              ],
+            ),
           ],
         ),
-      ],
-    );
-  }
-
-  Widget _buildSleepView() {
-    return Column(
-      children: [
-        const Text("total sleep time", style: TextStyle(color: Colors.grey)),
-        const SizedBox(height: 6),
-        Text("${ble.telemetry.sleepHours} hours",
-            style: const TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: Colors.indigoAccent)),
         const SizedBox(height: 30),
-        const Text("sleep record",
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        Text(
-            ble.telemetry.sleepHours > 0
-                ? "Normal Sleep Cycle"
-                : "no data temporarily",
-            style: const TextStyle(color: Colors.grey)),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text("heart rate record",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: ble.telemetry.hrHistory.isEmpty
+              ? const Center(
+                  child: Text("no data temporarily",
+                      style: TextStyle(color: Colors.grey)))
+              : ListView.separated(
+                  itemCount: ble.telemetry.hrHistory.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (ctx, i) {
+                    var r = ble.telemetry.hrHistory[i];
+                    return ListTile(
+                      leading: const Icon(Icons.circle,
+                          color: Color(0xFFFF4757), size: 10),
+                      title: Text("${r.bpm} bpm",
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      trailing: Text(r.time,
+                          style: const TextStyle(color: Colors.grey)),
+                    );
+                  },
+                ),
+        ),
       ],
     );
   }
 
-  Widget _buildImmunityView() {
+  Widget _buildGenericLayout() {
     return Column(
       children: [
-        const Text("immunity index", style: TextStyle(color: Colors.grey)),
-        const SizedBox(height: 6),
-        Text("${ble.telemetry.immunity} %",
-            style: const TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: Colors.amber)),
+        const SizedBox(height: 40),
+        Icon(
+          type == "BP"
+              ? Icons.water_drop
+              : (type == "Thermometer"
+                  ? Icons.thermostat
+                  : Icons.nightlight_round),
+          size: 64,
+          color: const Color(0xFFFF5722),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          type == "BP"
+              ? "${ble.telemetry.systolicBp}/${ble.telemetry.diastolicBp} mmHg"
+              : (type == "Thermometer"
+                  ? "${ble.telemetry.bodyTemp} °C"
+                  : "${ble.telemetry.sleepHours} h"),
+          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 30),
+        const Text(
+            "Measurement records will sync continuously while worn on your wrist.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey)),
       ],
     );
   }

@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 class MtkProtocol {
-  // 1. WWfit Handshake (Cancels 20s disconnect timer & turns watch icon BLUE)
+  // 1. Initial Handshake Packets (Turns watch icon BLUE)
   static List<List<int>> buildWwfitHandshake() {
     const commands = ["01,1", "03,1", "04,1", "05,1", "11,1"];
     return commands.map((cmd) => buildWwfitCmd(cmd)).toList();
@@ -13,7 +13,7 @@ class MtkProtocol {
     return utf8.encode(formatted);
   }
 
-  // 3. Proven KCT RTC Time Packet (Sets Watch Display Clock)
+  // 3. Proven KCT RTC Time Packet
   static List<int> buildKctTimePacket(DateTime now) {
     return [
       0xAB,
@@ -29,32 +29,52 @@ class MtkProtocol {
     ];
   }
 
-  // 4. 12-Hour vs 24-Hour Command (From c.M and c.N)
-  // SET,40,0 = 12-Hour mode | SET,40,1 = 24-Hour mode
-  static List<int> buildTimeFormatCmd(bool is12Hour) {
-    return buildWwfitCmd(is12Hour ? "SET,40,0" : "SET,40,1");
+  // 4. Force 12-Hour Mode (SET,40,0)
+  static List<int> build12HourFormatCmd() => buildWwfitCmd("SET,40,0");
+
+  // 5. Trigger Real-Time Heart Rate Measurement on Watch
+  static List<int> triggerHeartRateMeasure() => [0xAB, 0x00, 0x82, 0x01];
+
+  // 6. Query Health Sensors
+  static List<int> querySteps() => buildWwfitCmd("01,1");
+  static List<int> queryHeartRate() => buildWwfitCmd("03,1");
+  static List<int> queryBloodPressure() => buildWwfitCmd("04,1");
+  static List<int> queryImmunity() => buildWwfitCmd("05,1");
+  static List<int> queryThermometer() => buildWwfitCmd("11,1");
+  static List<int> querySleep() => buildWwfitCmd("02,1");
+
+  // 7. Watch Alarm Setting
+  static List<int> buildSetAlarmPacket(
+      int hour, int minute, int repeatMask, bool enabled) {
+    return [
+      0xAB,
+      0x00,
+      0x07,
+      hour & 0xFF,
+      minute & 0xFF,
+      repeatMask & 0xFF,
+      enabled ? 0x01 : 0x00,
+    ];
   }
 
-  // 5. Query Steps & Activity (PS,GET + KCT Step Request)
-  static List<int> buildPedometerQuery() {
-    return buildWwfitCmd("PS,GET");
+  // 8. Drink Water Reminder Interval
+  static List<int> buildDrinkWaterPacket(bool enabled, int intervalMinutes) {
+    return [
+      0xAB,
+      0x00,
+      0x12,
+      enabled ? 0x01 : 0x00,
+      intervalMinutes & 0xFF,
+    ];
   }
 
-  static List<int> buildKctStepQuery() {
-    return [0xAB, 0x00, 0x51];
-  }
+  // 9. Stop Find Phone Acknowledgment
+  static List<int> stopFindPhone() => buildWwfitCmd("10,4,0");
 
-  // 6. Direct Hardware Battery Query
-  static List<int> buildBatteryQuery() {
-    return [0xAB, 0x00, 0x91];
-  }
+  // 10. Find Watch (Vibration Alert)
+  static List<int> buildFindWatch() => [0xAB, 0x00, 0x03, 0x01];
 
-  // 7. Find Watch (Vibration Alert)
-  static List<int> buildFindWatch() {
-    return [0xAB, 0x00, 0x03, 0x01];
-  }
-
-  // 8. Notification Frame
+  // 11. Notification Packet
   static List<int> buildNotificationPacket(String title, String body) {
     List<int> t = utf8.encode(title);
     List<int> b = utf8.encode(body);
@@ -70,7 +90,7 @@ class MtkProtocol {
     ];
   }
 
-  // 9. Weather Forecast Packet (Updates watch weather widget)
+  // 12. Weather Forecast Packet
   static List<int> buildWeatherPacket(
       int tempC, int conditionCode, int highC, int lowC) {
     return [

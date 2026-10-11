@@ -30,7 +30,7 @@ class HomeTab extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // Steps Progress Arc Card
+        // Steps Arc
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
@@ -78,23 +78,12 @@ class HomeTab extends StatelessWidget {
                   _stat(ble.telemetry.distanceKm.toStringAsFixed(2), "km"),
                 ],
               ),
-              const SizedBox(height: 10),
-              const Row(
-                children: [
-                  Icon(Icons.navigation_rounded,
-                      color: Color(0xFFFF5722), size: 16),
-                  SizedBox(width: 6),
-                  Text("GPS 0.0km",
-                      style: TextStyle(fontSize: 12, color: Colors.grey)),
-                ],
-              ),
             ],
           ),
         ),
 
         const SizedBox(height: 16),
 
-        // 6 Health Cards matching the video
         GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
@@ -103,7 +92,7 @@ class HomeTab extends StatelessWidget {
           crossAxisSpacing: 12,
           childAspectRatio: 1.35,
           children: [
-            _healthCard(
+            _card(
               context,
               icon: Icons.nightlight_round,
               color: Colors.indigoAccent,
@@ -117,7 +106,7 @@ class HomeTab extends StatelessWidget {
                       builder: (_) =>
                           HealthDetailScreen(type: "Sleep", ble: ble))),
             ),
-            _healthCard(
+            _card(
               context,
               icon: Icons.favorite_rounded,
               color: const Color(0xFFFF4757),
@@ -131,7 +120,7 @@ class HomeTab extends StatelessWidget {
                       builder: (_) =>
                           HealthDetailScreen(type: "HeartRate", ble: ble))),
             ),
-            _healthCard(
+            _card(
               context,
               icon: Icons.water_drop_rounded,
               color: Colors.redAccent,
@@ -145,7 +134,7 @@ class HomeTab extends StatelessWidget {
                       builder: (_) =>
                           HealthDetailScreen(type: "BP", ble: ble))),
             ),
-            _healthCard(
+            _card(
               context,
               icon: Icons.bubble_chart_rounded,
               color: Colors.amber,
@@ -159,7 +148,7 @@ class HomeTab extends StatelessWidget {
                       builder: (_) =>
                           HealthDetailScreen(type: "Immunity", ble: ble))),
             ),
-            _healthCard(
+            _card(
               context,
               icon: Icons.thermostat_rounded,
               color: Colors.tealAccent,
@@ -173,12 +162,14 @@ class HomeTab extends StatelessWidget {
                       builder: (_) =>
                           HealthDetailScreen(type: "Thermometer", ble: ble))),
             ),
-            _healthCard(
+            _card(
               context,
               icon: Icons.battery_charging_full_rounded,
               color: Colors.cyanAccent,
               title: "Battery",
-              value: "${ble.telemetry.batteryLevel} %",
+              value: ble.telemetry.batteryLevel >= 0
+                  ? "${ble.telemetry.batteryLevel} %"
+                  : "-- %",
               onTap: null,
             ),
           ],
@@ -193,7 +184,7 @@ class HomeTab extends StatelessWidget {
         Text(l, style: const TextStyle(fontSize: 11, color: Colors.grey))
       ]);
 
-  Widget _healthCard(BuildContext ctx,
+  Widget _card(BuildContext ctx,
       {required IconData icon,
       required Color color,
       required String title,

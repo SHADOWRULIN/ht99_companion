@@ -17,6 +17,7 @@ class WatchBleService {
   BluetoothCharacteristic? notifyChar;
   BluetoothCharacteristic? alertChar;
   BluetoothCharacteristic? batteryChar;
+  BluetoothCharacteristic? hrGattChar;
 
   StreamSubscription? _scanSub;
   final List<StreamSubscription> _notifySubs = [];
@@ -135,6 +136,7 @@ class WatchBleService {
           }
           if (u.contains("2a06")) alertChar = c;
           if (u.contains("2a19")) batteryChar = c;
+          if (u.contains("2a37")) hrGattChar = c;
 
           if (c.properties.notify || c.properties.indicate) {
             try {
@@ -151,18 +153,14 @@ class WatchBleService {
       onStatus?.call("Connected & Initialized");
       onConnected?.call();
 
-      // 1. Send WWfit Handshake (Turns watch icon BLUE)
       for (var frame in MtkProtocol.buildWwfitHandshake()) {
         await writeRaw(frame);
         await Future.delayed(const Duration(milliseconds: 25));
       }
 
-      // 2. Automatically sync time in 12-Hour format immediately
       await autoSyncTime12Hour();
-
-      // 3. Query initial health stats & battery
-      await queryAllHealthData();
       await readSigBattery();
+      await queryAllHealthData();
     } catch (e) {
       log("Bind error: $e");
       onStatus?.call("Bind failed");
@@ -176,9 +174,14 @@ class WatchBleService {
     String hex = data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
     log("RX [$uuid]: $hex");
 
+    // Standard Bluetooth SIG Heart Rate (0x2A37)
+    if (uuid.contains("2a37") && data.length >= 2) {
+      int bpm = data[1];
+      _recordHeartRate(bpm);
+    }
+
     String text = String.fromCharCodes(data.where((b) => b >= 32 && b <= 126));
 
-    // Watch searches for phone (Find Phone trigger from watch)
     if (text.contains("10,4,1")) {
       log("WATCH TRIGGERED FIND PHONE!");
       triggerFindPhoneAlarm();
@@ -190,7 +193,6 @@ class WatchBleService {
       return;
     }
 
-    // Health parsing (WWfit format)
     if (text.contains("01,1")) {
       List<String> p = text.split(",");
       if (p.length >= 4) {
@@ -204,28 +206,24 @@ class WatchBleService {
     } else if (text.contains("03,1")) {
       List<String> p = text.split(",");
       if (p.length >= 3) {
-        telemetry.heartRate = int.tryParse(p[2]) ?? telemetry.heartRate;
-        log("Heart rate synced: ${telemetry.heartRate} BPM");
-        onData?.call();
+        int bpm = int.tryParse(p[2]) ?? telemetry.heartRate;
+        _recordHeartRate(bpm);
       }
     } else if (text.contains("04,1")) {
       List<String> p = text.split(",");
       if (p.length >= 4) {
         telemetry.systolicBp = int.tryParse(p[2]) ?? 120;
         telemetry.diastolicBp = int.tryParse(p[3]) ?? 80;
-        log("BP synced: ${telemetry.systolicBp}/${telemetry.diastolicBp}");
         onData?.call();
       }
     } else if (text.contains("11,1")) {
       List<String> p = text.split(",");
       if (p.length >= 3) {
         telemetry.bodyTemp = double.tryParse(p[2]) ?? 36.5;
-        log("Temp synced: ${telemetry.bodyTemp}°C");
         onData?.call();
       }
     }
 
-    // Fallback KCT health packet parser
     if (data[0] == 0xAB && data.length >= 4) {
       int cmd = data[2];
       if (cmd == 0x91 || cmd == 0x08) {
@@ -237,10 +235,24 @@ class WatchBleService {
         telemetry.distanceKm = telemetry.steps * 0.00075;
         onData?.call();
       } else if (cmd == 0x82 && data.length >= 4) {
-        telemetry.heartRate = data[3];
-        onData?.call();
+        _recordHeartRate(data[3]);
       }
     }
+  }
+
+  void _recordHeartRate(int bpm) {
+    if (bpm <= 30 || bpm >= 220) return;
+    telemetry.heartRate = bpm;
+    String timeStr = DateTime.now().toIso8601String().substring(11, 16);
+    telemetry.hrHistory.insert(0, HeartRateRecord(bpm: bpm, time: timeStr));
+    if (telemetry.hrHistory.length > 50) telemetry.hrHistory.removeLast();
+    log("Heart Rate Recorded: $bpm BPM at $timeStr");
+    onData?.call();
+  }
+
+  Future<void> measureHeartRateLive() async {
+    await writeRaw(MtkProtocol.triggerHeartRateMeasure());
+    log("Dispatched live Heart Rate measurement command");
   }
 
   void triggerFindPhoneAlarm() {
@@ -280,7 +292,6 @@ class WatchBleService {
     await writeRaw(MtkProtocol.queryThermometer());
     await Future.delayed(const Duration(milliseconds: 40));
     await writeRaw(MtkProtocol.querySleep());
-    log("Queried full health telemetry suite");
   }
 
   Future<void> readSigBattery() async {
@@ -291,9 +302,30 @@ class WatchBleService {
           telemetry.batteryLevel = v[0];
           log("SIG Battery: ${telemetry.batteryLevel}%");
           onData?.call();
+          return;
         }
       } catch (_) {}
     }
+  }
+
+  Future<void> saveAlarm(WatchAlarm alarm) async {
+    int mask = 0;
+    for (int i = 0; i < alarm.days.length; i++) {
+      if (alarm.days[i]) mask |= (1 << i);
+    }
+    await writeRaw(MtkProtocol.buildSetAlarmPacket(
+        alarm.hour, alarm.minute, mask, alarm.isEnabled));
+    telemetry.alarms.add(alarm);
+    log("Alarm saved: ${alarm.hour}:${alarm.minute}");
+    onData?.call();
+  }
+
+  Future<void> setDrinkWaterReminder(bool enabled, int interval) async {
+    telemetry.isDrinkWaterEnabled = enabled;
+    telemetry.drinkWaterIntervalMinutes = interval;
+    await writeRaw(MtkProtocol.buildDrinkWaterPacket(enabled, interval));
+    log("Drink Water set: $enabled every $interval min");
+    onData?.call();
   }
 
   Future<void> ringWatch() async {
@@ -308,14 +340,12 @@ class WatchBleService {
 
   Future<void> pushNotification(String title, String body) async {
     await writeRaw(MtkProtocol.buildNotificationPacket(title, body));
-    log("Pushed Notification: $title - $body");
   }
 
   Future<void> pushWeather(
       int tempC, int conditionCode, int highC, int lowC) async {
     await writeRaw(
         MtkProtocol.buildWeatherPacket(tempC, conditionCode, highC, lowC));
-    log("Dispatched Weather: $tempC°C");
   }
 
   Future<bool> writeRaw(List<int> bytes) async {

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../services/watch_ble_service.dart';
 import 'message_push_screen.dart';
 import 'dial_push_screen.dart';
+import 'alarm_setting_screen.dart';
+import 'drink_water_screen.dart';
 
 class DeviceTab extends StatelessWidget {
   final WatchBleService ble;
@@ -13,42 +15,47 @@ class DeviceTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     bool connected = ble.isConnected;
+    String batteryText = ble.telemetry.batteryLevel >= 0
+        ? "(${ble.telemetry.batteryLevel}%)"
+        : "(Loading...)";
 
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        // Watch Connection Header
+        // Apple Watch Device Banner (Neutral Earth Slate + Gold)
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-                colors: [Color(0xFFFF5722), Color(0xFFFF7043)]),
+              colors: [Color(0xFF2E3030), Color(0xFF202122)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFF5BE53).withOpacity(0.3)),
           ),
           child: Row(
             children: [
               CircleAvatar(
                 radius: 26,
-                backgroundColor: Colors.white24,
-                child: Icon(connected ? Icons.watch : Icons.watch_off,
-                    color: Colors.white),
+                backgroundColor: const Color(0xFFF5BE53).withOpacity(0.15),
+                child:
+                    const Icon(Icons.apple, color: Color(0xFFF5BE53), size: 30),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Model: HT99",
+                    const Text("Apple Watch HT99",
                         style: TextStyle(
                             color: Colors.white,
-                            fontSize: 18,
+                            fontSize: 17,
                             fontWeight: FontWeight.bold)),
                     Text(
-                      connected
-                          ? "Connected (${ble.telemetry.batteryLevel}%)"
-                          : "Disconnected",
-                      style:
-                          const TextStyle(color: Colors.white70, fontSize: 13),
+                      connected ? "Connected $batteryText" : "Disconnected",
+                      style: const TextStyle(
+                          color: Color(0xFFC5D1CB), fontSize: 13),
                     ),
                   ],
                 ),
@@ -57,16 +64,17 @@ class DeviceTab extends StatelessWidget {
                 onPressed:
                     connected ? () => ble.disconnect() : onConnectTrigger,
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black),
+                  backgroundColor: const Color(0xFFF5BE53),
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
                 child: Text(connected ? "Disconnect" : "Connect"),
               ),
             ],
           ),
         ),
-
         const SizedBox(height: 16),
-
         Card(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -81,6 +89,25 @@ class DeviceTab extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                         builder: (_) => MessagePushScreen(ble: ble))),
+              ),
+              const Divider(height: 1, indent: 64),
+              _tile(
+                context,
+                icon: Icons.alarm_rounded,
+                color: Colors.deepOrange,
+                title: "Alarm setting",
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => AlarmSettingScreen(ble: ble))),
+              ),
+              const Divider(height: 1, indent: 64),
+              _tile(
+                context,
+                icon: Icons.favorite_rounded,
+                color: Colors.pinkAccent,
+                title: "Heart rate detection",
+                onTap: connected ? () => ble.measureHeartRateLive() : null,
               ),
               const Divider(height: 1, indent: 64),
               _tile(
@@ -104,32 +131,13 @@ class DeviceTab extends StatelessWidget {
               const Divider(height: 1, indent: 64),
               _tile(
                 context,
-                icon: Icons.cloud_sync,
-                color: Colors.cyan,
-                title: "Sync Weather",
-                onTap: connected ? () => ble.pushWeather(31, 1, 35, 27) : null,
-              ),
-              const Divider(height: 1, indent: 64),
-              _tile(
-                context,
                 icon: Icons.local_drink_rounded,
                 color: Colors.blueAccent,
                 title: "Reminder to drink water",
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text("Water reminder interval active")));
-                },
-              ),
-              const Divider(height: 1, indent: 64),
-              _tile(
-                context,
-                icon: Icons.airline_seat_recline_normal_rounded,
-                color: Colors.orange,
-                title: "Recumbent reminder",
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text("Sedentary reminder interval active")));
-                },
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => DrinkWaterScreen(ble: ble))),
               ),
             ],
           ),

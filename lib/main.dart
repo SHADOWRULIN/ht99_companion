@@ -7,17 +7,28 @@ import 'ui/my_tab.dart';
 import 'ui/terminal_tab.dart';
 
 void main() {
-  runApp(const Ht99MasterApp());
+  runApp(const AppleWatchManagerApp());
 }
 
-class Ht99MasterApp extends StatefulWidget {
-  const Ht99MasterApp({super.key});
+// Neutral Earth Tones Palette
+class EarthColors {
+  static const Color ochreGold = Color(0xFFF5BE53);
+  static const Color mutedSage = Color(0xFFC5D1CB);
+  static const Color softCream = Color(0xFFEAEFE6);
+  static const Color darkCharcoal = Color(0xFF202122);
+  static const Color warmSlate = Color(0xFF2E3030);
+  static const Color pureWhite = Color(0xFFFFFFFF);
+  static const Color pureBlack = Color(0xFF000000);
+}
+
+class AppleWatchManagerApp extends StatefulWidget {
+  const AppleWatchManagerApp({super.key});
 
   @override
-  State<Ht99MasterApp> createState() => _Ht99MasterAppState();
+  State<AppleWatchManagerApp> createState() => _AppleWatchManagerAppState();
 }
 
-class _Ht99MasterAppState extends State<Ht99MasterApp> {
+class _AppleWatchManagerAppState extends State<AppleWatchManagerApp> {
   ThemeMode _themeMode = ThemeMode.dark;
   final WatchBleService _ble = WatchBleService();
 
@@ -40,17 +51,20 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
           context: context,
           barrierDismissible: false,
           builder: (ctx) => AlertDialog(
-            backgroundColor: const Color(0xFF1E1E2C),
+            backgroundColor: EarthColors.warmSlate,
             title: const Row(
               children: [
                 Icon(Icons.ring_volume_rounded,
-                    color: Color(0xFFFF5722), size: 30),
+                    color: EarthColors.ochreGold, size: 28),
                 SizedBox(width: 10),
-                Text("Watch Finding Phone!"),
+                Text("Watch Finding Phone",
+                    style: TextStyle(color: Colors.white, fontSize: 18)),
               ],
             ),
             content: const Text(
-                "Your HT99 watch is triggering this phone to ring and vibrate."),
+              "Your HT99 watch is triggering this phone to ring and vibrate.",
+              style: TextStyle(color: EarthColors.softCream),
+            ),
             actions: [
               ElevatedButton(
                 onPressed: () {
@@ -58,9 +72,10 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
                   Navigator.pop(ctx);
                 },
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF5722),
-                    foregroundColor: Colors.white),
-                child: const Text("Stop Ringing"),
+                  backgroundColor: EarthColors.ochreGold,
+                  foregroundColor: EarthColors.pureBlack,
+                ),
+                child: const Text("Stop Alarm"),
               ),
             ],
           ),
@@ -77,14 +92,17 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text("Connecting to HT99", textAlign: TextAlign.center),
+        backgroundColor: Theme.of(context).cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text("Connecting to Watch", textAlign: TextAlign.center),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(color: Color(0xFFFF5722)),
-            SizedBox(height: 16),
-            Text("Negotiating link & handshake...",
-                textAlign: TextAlign.center),
+            SizedBox(height: 10),
+            CircularProgressIndicator(color: EarthColors.ochreGold),
+            SizedBox(height: 18),
+            Text("Establishing link with HT99...",
+                textAlign: TextAlign.center, style: TextStyle(fontSize: 13)),
           ],
         ),
         actionsAlignment: MainAxisAlignment.spaceAround,
@@ -103,6 +121,10 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
               _ble.isConnecting = false;
               _ble.scanAndConnect();
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: EarthColors.ochreGold,
+              foregroundColor: EarthColors.pureBlack,
+            ),
             child: const Text("Search Again"),
           ),
         ],
@@ -117,23 +139,48 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "HT99 Manager Pro",
+      title: "Apple",
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
+
+      // Light Theme (Earth Tones: Cream, Sage, and Gold)
       theme: ThemeData(
         brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF6F8FB),
-        cardColor: Colors.white,
-        colorScheme: const ColorScheme.light(primary: Color(0xFFFF5722)),
+        scaffoldBackgroundColor: EarthColors.softCream,
+        cardColor: EarthColors.pureWhite,
+        colorScheme: const ColorScheme.light(
+          primary: EarthColors.ochreGold,
+          secondary: EarthColors.mutedSage,
+          surface: EarthColors.pureWhite,
+          onSurface: EarthColors.darkCharcoal,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: EarthColors.softCream,
+          foregroundColor: EarthColors.darkCharcoal,
+          elevation: 0,
+        ),
         useMaterial3: true,
       ),
+
+      // Dark Theme (Earth Tones: Charcoal, Slate, and Gold)
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0D0F15),
-        cardColor: const Color(0xFF161922),
-        colorScheme: const ColorScheme.dark(primary: Color(0xFFFF5722)),
+        scaffoldBackgroundColor: EarthColors.darkCharcoal,
+        cardColor: EarthColors.warmSlate,
+        colorScheme: const ColorScheme.dark(
+          primary: EarthColors.ochreGold,
+          secondary: EarthColors.mutedSage,
+          surface: EarthColors.warmSlate,
+          onSurface: EarthColors.softCream,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: EarthColors.darkCharcoal,
+          foregroundColor: EarthColors.softCream,
+          elevation: 0,
+        ),
         useMaterial3: true,
       ),
+
       home: Scaffold(
         body: SafeArea(
           child: Column(
@@ -146,7 +193,8 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
                   decoration: BoxDecoration(
                     color: Colors.redAccent.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.redAccent),
+                    border:
+                        Border.all(color: Colors.redAccent.withOpacity(0.4)),
                   ),
                   child: Row(
                     children: [
@@ -154,10 +202,16 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
                           color: Colors.redAccent),
                       const SizedBox(width: 8),
                       const Expanded(
-                          child: Text("Bluetooth is turned off.",
-                              style: TextStyle(fontWeight: FontWeight.bold))),
+                        child: Text("Bluetooth is turned off.",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
                       ElevatedButton(
                         onPressed: () => FlutterBluePlus.turnOn(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                        ),
                         child: const Text("Turn On"),
                       ),
                     ],
@@ -185,6 +239,7 @@ class _Ht99MasterAppState extends State<Ht99MasterApp> {
         bottomNavigationBar: NavigationBar(
           selectedIndex: _currentIndex,
           onDestinationSelected: (i) => setState(() => _currentIndex = i),
+          indicatorColor: EarthColors.ochreGold.withOpacity(0.25),
           destinations: const [
             NavigationDestination(
                 icon: Icon(Icons.home_rounded), label: "Home"),
