@@ -100,14 +100,14 @@ class MainActivity: FlutterActivity() {
             vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
             val pattern = longArrayOf(0, 800, 400, 800)
             vibrator?.vibrate(pattern, 0)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {}
     }
 
     private fun stopPhoneAlarm() {
         try {
             ringtone?.stop()
             vibrator?.cancel()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {}
     }
 
     @SuppressLint("MissingPermission")
@@ -119,7 +119,7 @@ class MainActivity: FlutterActivity() {
         }
         if (gattServer != null) return true
 
-        return try {
+        try {
             val bm = getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager ?: return false
             gattServer = bm.openGattServer(this, object : BluetoothGattServerCallback() {
                 override fun onCharacteristicReadRequest(
@@ -165,8 +165,10 @@ class MainActivity: FlutterActivity() {
             tfService.addCharacteristic(tfChar)
             gattServer?.addService(tfService)
 
-            true
-        } catch (_: Exception) {}
+            return true
+        } catch (e: Exception) {
+            return false
+        }
     }
 
     private fun getCurrentTimeBytes(): ByteArray {
@@ -214,7 +216,7 @@ class MainActivity: FlutterActivity() {
             for (d in devices) {
                 gattServer?.notifyCharacteristicChanged(d, char, false)
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {}
     }
 
     @SuppressLint("MissingPermission")
@@ -228,12 +230,12 @@ class MainActivity: FlutterActivity() {
             for (d in devices) {
                 gattServer?.notifyCharacteristicChanged(d, char, false)
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {}
     }
 
     override fun onDestroy() {
         super.onDestroy()
         stopPhoneAlarm()
-        try { gattServer?.close() } catch (_: Exception) {}
+        try { gattServer?.close() } catch (e: Exception) {}
     }
 }
