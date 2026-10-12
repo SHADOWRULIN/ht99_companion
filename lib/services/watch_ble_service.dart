@@ -11,8 +11,6 @@ class WatchBleService {
       MethodChannel("com.ht99.companion/phone");
   static const MethodChannel _notifChannel =
       MethodChannel("com.ht99.companion/notifications");
-  static const MethodChannel _mtkChannel =
-      MethodChannel("com.ht99.companion/mtk");
 
   BluetoothDevice? device;
   BluetoothCharacteristic? writeChar;
@@ -63,24 +61,6 @@ class WatchBleService {
     logs.insert(0, "[$ts] $msg");
     if (logs.length > 200) logs.removeLast();
     onData?.call();
-  }
-
-  /// Encrypts command through native libCommand.so and transmits to 0x2AA1
-  Future<bool> sendMtkCommand(int type, String cmd) async {
-    try {
-      final Uint8List? encoded =
-          await _mtkChannel.invokeMethod("encodeCommand", {
-        "type": type,
-        "cmd": cmd,
-      });
-      if (encoded != null && encoded.isNotEmpty) {
-        return await writeRaw(encoded);
-      }
-      return false;
-    } catch (e) {
-      log("MTK Native encode error: $e");
-      return false;
-    }
   }
 
   Future<void> scanAndConnect() async {
@@ -145,13 +125,11 @@ class WatchBleService {
         for (var c in s.characteristics) {
           String u = c.uuid.str.toLowerCase();
 
-          if (u.contains("2aa1") ||
-              c.properties.write ||
-              c.properties.writeWithoutResponse) {
-            writeChar ??= c;
+          if (u.contains("2aa1")) {
+            writeChar = c;
           }
           if (u.contains("2aa0") || u.contains("2abc")) {
-            notifyChar ??= c;
+            notifyChar = c;
           }
           if (u.contains("2a06")) alertChar = c;
           if (u.contains("2a19")) batteryChar = c;
@@ -167,23 +145,19 @@ class WatchBleService {
         }
       }
 
-      log("Endpoints acquired. Initializing native MTK session...");
+      log("Endpoints acquired. Initializing WWfit link...");
       onStatus?.call("Connected & Initialized");
       onConnected?.call();
 
-      // 1. Initialize native RC4 cipher key ("we had")
-      await _mtkChannel.invokeMethod("initKey");
+      // Transmit WWfit initialization sequence
+      for (var frame in MtkProtocol.buildWwfitHandshake()) {
+        await writeRaw(frame);
+        await Future.delayed(const Duration(milliseconds: 40));
+      }
 
-      // 2. Transmit native encrypted REQV handshake (Turns icon BLUE and resets watchdog)
-      await sendMtkCommand(2, "REQV");
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      // 3. Auto-sync time in 12-Hour mode
+      await writeRaw(MtkProtocol.queryKctPedometer());
       await autoSyncTime12Hour();
-
-      // 4. Query telemetry suite
       await readSigBattery();
-      await queryAllHealthData();
     } catch (e) {
       log("Bind error: $e");
       onStatus?.call("Bind failed");
@@ -192,23 +166,13 @@ class WatchBleService {
     }
   }
 
-  void _parseIncoming(String uuid, List<int> data) async {
+  void _parseIncoming(String uuid, List<int> data) {
     if (data.isEmpty) return;
 
-    // Decrypt buffer via native libCommand.so
-    String text = "";
-    try {
-      final Map? decoded = await _mtkChannel.invokeMethod("decodeBuffer", {
-        "data": Uint8List.fromList(data),
-      });
-      if (decoded != null && decoded["text"] != null) {
-        text = decoded["text"];
-      }
-    } catch (_) {
-      text = String.fromCharCodes(data.where((b) => b >= 32 && b <= 126));
-    }
+    String hex = data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+    String text = String.fromCharCodes(data.where((b) => b >= 32 && b <= 126));
 
-    log("RX [$uuid]: $text");
+    log("RX [$uuid]: $text ($hex)");
 
     // Watch triggers "Find Phone"
     if (text.contains("10,4,1")) {
@@ -222,8 +186,8 @@ class WatchBleService {
       return;
     }
 
-    // Health parsing
-    if (text.contains("01,1")) {
+    // Parse WWfit telemetry strings
+    if (text.contains("01,1") || text.contains("KCT_PEDOMETER")) {
       List<String> p = text.split(",");
       if (p.length >= 4) {
         telemetry.steps = int.tryParse(p[2]) ?? telemetry.steps;
@@ -244,12 +208,14 @@ class WatchBleService {
       if (p.length >= 4) {
         telemetry.systolicBp = int.tryParse(p[2]) ?? 120;
         telemetry.diastolicBp = int.tryParse(p[3]) ?? 80;
+        log("BP synced: ${telemetry.systolicBp}/${telemetry.diastolicBp}");
         onData?.call();
       }
     } else if (text.contains("11,1")) {
       List<String> p = text.split(",");
       if (p.length >= 3) {
         telemetry.bodyTemp = double.tryParse(p[2]) ?? 36.5;
+        log("Temp synced: ${telemetry.bodyTemp}°C");
         onData?.call();
       }
     }
@@ -266,7 +232,7 @@ class WatchBleService {
   }
 
   Future<void> measureHeartRateLive() async {
-    await sendMtkCommand(9, "WW ww 0 0 4 03,1");
+    await writeRaw(MtkProtocol.queryHeartRate());
     log("Dispatched live Heart Rate measure command");
   }
 
@@ -280,7 +246,7 @@ class WatchBleService {
   void stopFindPhoneAlarm() {
     isPhoneRinging = false;
     _phoneChannel.invokeMethod("stopAlarm");
-    sendMtkCommand(9, "WW ww 0 0 6 10,4,0");
+    writeRaw(MtkProtocol.stopFindPhone());
     onData?.call();
   }
 
@@ -290,29 +256,23 @@ class WatchBleService {
       await _ctsChannel.invokeMethod("setTimeFormat", {"is12Hour": true});
     } catch (_) {}
 
-    int nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    int tzOffset = DateTime.now().timeZoneOffset.inMilliseconds;
-
-    // Send encrypted MediaTek time sync (Type 2: SYNC)
-    await sendMtkCommand(2, "$nowSec $tzOffset 0");
-    await Future.delayed(const Duration(milliseconds: 40));
-
-    // Send encrypted 12-hour format lock (Type 9: EXCD)
-    await sendMtkCommand(9, "WW ww 0 0 8 SET,40,0");
+    await writeRaw(MtkProtocol.build12HourFormatCmd());
     log("Auto-synced time in 12-Hour format");
     onData?.call();
   }
 
   Future<void> queryAllHealthData() async {
-    await sendMtkCommand(9, "WW ww 0 0 4 01,1"); // Steps
-    await Future.delayed(const Duration(milliseconds: 50));
-    await sendMtkCommand(9, "WW ww 0 0 4 03,1"); // Heart Rate
-    await Future.delayed(const Duration(milliseconds: 50));
-    await sendMtkCommand(9, "WW ww 0 0 4 04,1"); // Blood Pressure
-    await Future.delayed(const Duration(milliseconds: 50));
-    await sendMtkCommand(9, "WW ww 0 0 4 11,1"); // Thermometer
-    await Future.delayed(const Duration(milliseconds: 50));
-    await sendMtkCommand(9, "WW ww 0 0 4 02,1"); // Sleep
+    await writeRaw(MtkProtocol.querySteps());
+    await Future.delayed(const Duration(milliseconds: 40));
+    await writeRaw(MtkProtocol.queryKctPedometer());
+    await Future.delayed(const Duration(milliseconds: 40));
+    await writeRaw(MtkProtocol.queryHeartRate());
+    await Future.delayed(const Duration(milliseconds: 40));
+    await writeRaw(MtkProtocol.queryBloodPressure());
+    await Future.delayed(const Duration(milliseconds: 40));
+    await writeRaw(MtkProtocol.queryThermometer());
+    await Future.delayed(const Duration(milliseconds: 40));
+    await writeRaw(MtkProtocol.querySleep());
   }
 
   Future<void> readSigBattery() async {
@@ -334,10 +294,8 @@ class WatchBleService {
     for (int i = 0; i < alarm.days.length; i++) {
       if (alarm.days[i]) mask |= (1 << i);
     }
-    String cmd =
-        "SET,ALARM,${alarm.hour},${alarm.minute},$mask,${alarm.isEnabled ? 1 : 0}";
-    await sendMtkCommand(9, "WW ww 0 0 ${cmd.length} $cmd");
-
+    await writeRaw(MtkProtocol.buildSetAlarmPacket(
+        alarm.hour, alarm.minute, mask, alarm.isEnabled));
     if (!telemetry.alarms.contains(alarm)) {
       telemetry.alarms.add(alarm);
     }
@@ -348,8 +306,7 @@ class WatchBleService {
   Future<void> setDrinkWaterReminder(bool enabled, int interval) async {
     telemetry.isDrinkWaterEnabled = enabled;
     telemetry.drinkWaterIntervalMinutes = interval;
-    String cmd = "SET,DRINK,${enabled ? 1 : 0},$interval";
-    await sendMtkCommand(9, "WW ww 0 0 ${cmd.length} $cmd");
+    await writeRaw(MtkProtocol.buildDrinkWaterPacket(enabled, interval));
     log("Drink Water set: $enabled every $interval min");
     onData?.call();
   }
@@ -360,28 +317,19 @@ class WatchBleService {
         await alertChar!.write([0x02], withoutResponse: true);
       } catch (_) {}
     }
-    await sendMtkCommand(9, "WW ww 0 0 4 10,1");
+    await writeRaw(MtkProtocol.buildFindWatch());
     log("Dispatched Find Watch command");
   }
 
   Future<void> pushNotification(String title, String body) async {
-    int timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    String xml = '<?xml version="1.0" encoding="UTF-8"?>'
-        '<event_report>'
-        '<header><category>notification</category><subType>text</subType><msgId>1</msgId><action>add</action></header>'
-        '<body><title>$title</title><content>$body</content><sender>Companion</sender><timestamp>$timestamp</timestamp></body>'
-        '</event_report>';
-
-    // Send encrypted notification under Command Type 1 (DATA)
-    await sendMtkCommand(1, xml);
-    log("Pushed Notification: $title - $body");
+    await writeRaw(MtkProtocol.buildNotificationPacket(title, body));
+    log("Pushed Notification: $title");
   }
 
   Future<void> pushWeather(
       int tempC, int conditionCode, int highC, int lowC) async {
-    String payload = "Karachi Sunny $tempC $highC $lowC";
-    await sendMtkCommand(
-        9, "smartwatch yahooweather 0 0 ${payload.length} $payload");
+    await writeRaw(
+        MtkProtocol.buildWeatherPacket(tempC, conditionCode, highC, lowC));
     log("Dispatched Weather: $tempC°C");
   }
 
@@ -391,14 +339,13 @@ class WatchBleService {
 
     try {
       if (bytes.length <= chunkSize) {
-        await writeChar!.write(bytes,
-            withoutResponse: writeChar!.properties.writeWithoutResponse);
+        // Write with response matches g0.java write_type=2
+        await writeChar!.write(bytes, withoutResponse: false);
         return true;
       }
       for (int i = 0; i < bytes.length; i += chunkSize) {
         int end = (i + chunkSize < bytes.length) ? i + chunkSize : bytes.length;
-        await writeChar!.write(bytes.sublist(i, end),
-            withoutResponse: writeChar!.properties.writeWithoutResponse);
+        await writeChar!.write(bytes.sublist(i, end), withoutResponse: false);
         await Future.delayed(const Duration(milliseconds: 18));
       }
       return true;

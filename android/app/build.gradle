@@ -19,17 +19,13 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.ht99_companion"
-        minSdk = 21
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
-
-        ndk {
-            abiFilters "armeabi-v7a"
-        }
+        applicationId "com.example.ht99_companion"
+        minSdkVersion 21
+        targetSdkVersion 35
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
     }
-
+    
     buildTypes {
         release {
             signingConfig = signingConfigs.debug

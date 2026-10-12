@@ -73,7 +73,9 @@ class HomeTab extends StatelessWidget {
                 children: [
                   _stat("${(progress * 100).toInt()}%", "Percent"),
                   _stat("${ble.telemetry.calories}", "kcal"),
-                  _stat("${ble.telemetry.distanceKm.toStringAsFixed(2)}", "km"),
+                  Text(ble.telemetry.steps.toString(),
+                      style: const TextStyle(
+                          fontSize: 36, fontWeight: FontWeight.bold)),
                 ],
               ),
             ],

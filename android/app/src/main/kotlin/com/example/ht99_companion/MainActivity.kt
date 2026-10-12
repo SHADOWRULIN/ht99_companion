@@ -16,13 +16,11 @@ import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import com.mediatek.wearable.LoadJniFunction
 import java.util.*
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL_CTS = "com.ht99.companion/cts"
     private val CHANNEL_PHONE = "com.ht99.companion/phone"
-    private val CHANNEL_MTK = "com.ht99.companion/mtk"
 
     private var gattServer: BluetoothGattServer? = null
     private var ringtone: Ringtone? = null
@@ -41,48 +39,6 @@ class MainActivity: FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // Native MediaTek JNI Encoder / Decoder
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_MTK).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "initKey" -> {
-                    try {
-                        val key = "we had".toByteArray(Charsets.UTF_8)
-                        LoadJniFunction.a().e(key, key.size)
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error("JNI_INIT_ERR", e.message, null)
-                    }
-                }
-                "encodeCommand" -> {
-                    try {
-                        val type = call.argument<Int>("type") ?: 9
-                        val cmd = call.argument<String>("cmd") ?: ""
-                        val encoded = LoadJniFunction.a().d(type, cmd)
-                        result.success(encoded)
-                    } catch (e: Exception) {
-                        result.error("JNI_ENCODE_ERR", e.message, null)
-                    }
-                }
-                "decodeBuffer" -> {
-                    try {
-                        val data = call.argument<ByteArray>("data")
-                        if (data != null) {
-                            val cmdType = LoadJniFunction.a().b(data, data.size)
-                            val len = LoadJniFunction.a().c(data, data.size)
-                            val text = String(data, Charsets.UTF_8)
-                            result.success(mapOf("type" to cmdType, "length" to len, "text" to text))
-                        } else {
-                            result.success(null)
-                        }
-                    } catch (e: Exception) {
-                        result.error("JNI_DECODE_ERR", e.message, null)
-                    }
-                }
-                else -> result.notImplemented()
-            }
-        }
-
-        // CTS Channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_CTS).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startCtsServer" -> result.success(startCtsGattServer())
@@ -100,7 +56,6 @@ class MainActivity: FlutterActivity() {
             }
         }
 
-        // Phone Alert Channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_PHONE).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startAlarm" -> {
@@ -211,9 +166,7 @@ class MainActivity: FlutterActivity() {
             gattServer?.addService(tfService)
 
             true
-        } catch (_: Exception) {
-            false
-        }
+        } catch (_: Exception) {}
     }
 
     private fun getCurrentTimeBytes(): ByteArray {
