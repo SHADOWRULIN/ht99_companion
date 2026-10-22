@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
 
 /// One MediaTek message is a native-encoded command frame, optionally followed
@@ -21,17 +20,33 @@ class MtkCommand {
 class MtkProtocol {
   static const MethodChannel _channel = MethodChannel('com.ht99.companion/mtk');
   static bool _initialized = false;
+  static String? lastInitializationError;
   static int _nextMessageId = 1;
 
   static Future<bool> initialize() async {
     if (_initialized) return true;
+
+    lastInitializationError = null;
+
     try {
       final ok = await _channel.invokeMethod<bool>('initialize') ?? false;
+
       _initialized = ok;
+
+      if (!ok) {
+        lastInitializationError = 'Native initialization returned false.';
+      }
+
       return ok;
-    } on PlatformException {
+    } on PlatformException catch (e) {
+      lastInitializationError =
+          '${e.code}: ${e.message}; details: ${e.details}';
       return false;
-    } on MissingPluginException {
+    } on MissingPluginException catch (e) {
+      lastInitializationError = 'Missing native method channel: $e';
+      return false;
+    } catch (e) {
+      lastInitializationError = e.toString();
       return false;
     }
   }
@@ -126,8 +141,10 @@ class MtkProtocol {
     required String appName,
     required String appId,
   }) async {
-    final safeTitle = _xml(title.length > 128 ? '${title.substring(0, 128)}…' : title);
-    final safeBody = _xml(body.length > 256 ? '${body.substring(0, 256)}…' : body);
+    final safeTitle =
+        _xml(title.length > 128 ? '${title.substring(0, 128)}…' : title);
+    final safeBody =
+        _xml(body.length > 256 ? '${body.substring(0, 256)}…' : body);
     final safeApp = _xml(appName);
     final safeId = _xml(appId);
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;

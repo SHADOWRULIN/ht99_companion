@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -20,9 +19,12 @@ import 'mtk_protocol.dart';
 /// * Missing sensor values stay missing; we never invent a plausible-looking
 ///   heart rate, blood pressure, temperature, steps or oxygen value.
 class WatchBleService {
-  static const MethodChannel _ctsChannel = MethodChannel('com.ht99.companion/cts');
-  static const MethodChannel _phoneChannel = MethodChannel('com.ht99.companion/phone');
-  static const MethodChannel _notifChannel = MethodChannel('com.ht99.companion/notifications');
+  static const MethodChannel _ctsChannel =
+      MethodChannel('com.ht99.companion/cts');
+  static const MethodChannel _phoneChannel =
+      MethodChannel('com.ht99.companion/phone');
+  static const MethodChannel _notifChannel =
+      MethodChannel('com.ht99.companion/notifications');
 
   static const String _dogpService = '000018a0-0000-1000-8000-00805f9b34fb';
   static const String _dogpWrite = '00002aa1-0000-1000-8000-00805f9b34fb';
@@ -31,7 +33,8 @@ class WatchBleService {
   static const String _alertUuid = '00002a06-0000-1000-8000-00805f9b34fb';
   static const String _batteryUuid = '00002a19-0000-1000-8000-00805f9b34fb';
   static const String _heartRateUuid = '00002a37-0000-1000-8000-00805f9b34fb';
-  static const String _plxContinuousUuid = '00002a5f-0000-1000-8000-00805f9b34fb';
+  static const String _plxContinuousUuid =
+      '00002a5f-0000-1000-8000-00805f9b34fb';
 
   BluetoothDevice? device;
   BluetoothCharacteristic? writeChar;
@@ -104,12 +107,15 @@ class WatchBleService {
     if (!nativeOk) {
       isConnecting = false;
       onStatus?.call('Native protocol unavailable');
-      log('ERROR: libCommand.so could not initialize. See patch README and Android ABI settings.');
+      log(
+        'ERROR: ${MtkProtocol.lastInitializationError ?? "Unknown native initialization error."}',
+      );
       return;
     }
 
     try {
-      final server = await _ctsChannel.invokeMethod<bool>('startCtsServer') ?? false;
+      final server =
+          await _ctsChannel.invokeMethod<bool>('startCtsServer') ?? false;
       log(server
           ? 'Phone Current Time + Time Format GATT profiles started.'
           : 'Warning: phone time-profile server/advertising did not start; time sync may be limited.');
@@ -161,7 +167,8 @@ class WatchBleService {
     try {
       onStatus?.call('Connecting…');
       log('Connecting to ${target.platformName.isEmpty ? 'HT99' : target.platformName} [${target.remoteId.str}].');
-      await target.connect(license: License.nonprofit, autoConnect: false, mtu: 256);
+      await target.connect(
+          license: License.nonprofit, autoConnect: false, mtu: 256);
       device = target;
       _connectionSub = target.connectionState.listen((state) {
         if (state == BluetoothConnectionState.disconnected && isConnected) {
@@ -189,7 +196,8 @@ class WatchBleService {
       }
 
       if (writeChar == null) {
-        throw StateError('The watch did not expose DOGP write characteristic 0x2AA1.');
+        throw StateError(
+            'The watch did not expose DOGP write characteristic 0x2AA1.');
       }
       if (notifyChar == null) {
         log('Warning: DOGP read/notify characteristic 0x2AA0 was not found.');
@@ -202,12 +210,15 @@ class WatchBleService {
               uuid == _dogpAltRead ||
               uuid == _heartRateUuid ||
               uuid == _plxContinuousUuid;
-          if (isTargetNotifier && (characteristic.properties.notify || characteristic.properties.indicate)) {
+          if (isTargetNotifier &&
+              (characteristic.properties.notify ||
+                  characteristic.properties.indicate)) {
             try {
               await characteristic.setNotifyValue(true);
               _notifySubs.add(characteristic.lastValueStream.listen(
                 (data) => _onCharacteristicValue(uuid, data),
-                onError: (Object error) => log('Notify stream error [$uuid]: $error'),
+                onError: (Object error) =>
+                    log('Notify stream error [$uuid]: $error'),
               ));
             } catch (e) {
               log('Could not subscribe to $uuid: $e');
@@ -236,7 +247,8 @@ class WatchBleService {
 
       await readSigBattery();
       try {
-        final version = await _versionCompleter!.future.timeout(const Duration(seconds: 8));
+        final version =
+            await _versionCompleter!.future.timeout(const Duration(seconds: 8));
         log('Watch protocol version acknowledged: $version.');
       } on TimeoutException {
         log('No protocol version acknowledgement arrived. BLE is connected, but watch-control commands are not marked ready.');
@@ -247,7 +259,9 @@ class WatchBleService {
       isConnected = false;
       isConnecting = false;
       isProtocolReady = false;
-      try { await target.disconnect(); } catch (_) {}
+      try {
+        await target.disconnect();
+      } catch (_) {}
       await _clearConnectionReferences();
     }
   }
@@ -263,8 +277,10 @@ class WatchBleService {
       return;
     }
 
-    final hex = bytes.map((int b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
-    final printable = String.fromCharCodes(bytes.where((int b) => b >= 32 && b <= 126));
+    final hex =
+        bytes.map((int b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+    final printable =
+        String.fromCharCodes(bytes.where((int b) => b >= 32 && b <= 126));
     log('RX [$uuid]: ${printable.isEmpty ? '(binary)' : printable} [$hex]');
     if (printable.contains('10,4,1')) {
       triggerFindPhoneAlarm();
@@ -312,7 +328,9 @@ class WatchBleService {
         final magic = _findMagic(_rxBuffer);
         if (magic < 0) {
           // Retain only enough tail bytes to detect a split F0F0F0F1 marker.
-          if (_rxBuffer.length > 3) _rxBuffer.removeRange(0, _rxBuffer.length - 3);
+          if (_rxBuffer.length > 3) {
+            _rxBuffer.removeRange(0, _rxBuffer.length - 3);
+          }
           return;
         }
         if (magic > 0) _rxBuffer.removeRange(0, magic);
@@ -340,7 +358,11 @@ class WatchBleService {
           };
         } catch (e) {
           log('Cannot inspect incoming MTK frame: $e');
-          _pendingRx = <String, dynamic>{'type': -1, 'dataLength': 0, 'text': ''};
+          _pendingRx = <String, dynamic>{
+            'type': -1,
+            'dataLength': 0,
+            'text': ''
+          };
         }
       }
     } catch (e) {
@@ -352,20 +374,26 @@ class WatchBleService {
 
   int _findMagic(List<int> bytes) {
     for (var i = 0; i <= bytes.length - 4; i++) {
-      if (bytes[i] == 0xf0 && bytes[i + 1] == 0xf0 && bytes[i + 2] == 0xf0 && bytes[i + 3] == 0xf1) {
+      if (bytes[i] == 0xf0 &&
+          bytes[i + 1] == 0xf0 &&
+          bytes[i + 2] == 0xf0 &&
+          bytes[i + 3] == 0xf1) {
         return i;
       }
     }
     return -1;
   }
 
-  Future<void> _handleMtkMessage(int type, String command, List<int> data) async {
-    final body = utf8.decode(data, allowMalformed: true).replaceAll('\u0000', '').trim();
+  Future<void> _handleMtkMessage(
+      int type, String command, List<int> data) async {
+    final body =
+        utf8.decode(data, allowMalformed: true).replaceAll('\u0000', '').trim();
     log('MTK message type=$type command="${command.replaceAll('\n', ' ')}" dataBytes=${data.length}${body.isEmpty ? '' : ' data="$body"'}');
 
     // This is the same handshake/version state used by WWfit's ReadDataParser.
     if (type == 4) {
-      final match = RegExp(r'\d{1,5}').firstMatch(body.isNotEmpty ? body : command);
+      final match =
+          RegExp(r'\d{1,5}').firstMatch(body.isNotEmpty ? body : command);
       final version = match == null ? null : int.tryParse(match.group(0)!);
       if (version != null && version > 0) {
         deviceVersion = version;
@@ -395,7 +423,8 @@ class WatchBleService {
 
     // These fields are updated only when the incoming body actually contains a
     // recognizable value. No fixed fallback values are assigned on parse failure.
-    final stepMatch = RegExp(r'(?:^|[,;\s])01,1[,;\s]+(\d+)(?:[,;\s]+(\d+))?').firstMatch(text);
+    final stepMatch = RegExp(r'(?:^|[,;\s])01,1[,;\s]+(\d+)(?:[,;\s]+(\d+))?')
+        .firstMatch(text);
     if (stepMatch != null) {
       final steps = int.tryParse(stepMatch.group(1) ?? '');
       if (steps != null && steps >= 0 && steps < 200000) {
@@ -406,13 +435,15 @@ class WatchBleService {
           telemetry.calories = calories;
           telemetry.hasCaloriesData = true;
         }
-        telemetry.distanceKm = steps * 0.00075; // Estimated from step count, not a sensor reading.
+        telemetry.distanceKm =
+            steps * 0.00075; // Estimated from step count, not a sensor reading.
         changed = true;
         log('Step response parsed: $steps${telemetry.hasCaloriesData ? ' steps / ${telemetry.calories} kcal' : ' steps'}');
       }
     }
 
-    final heartMatch = RegExp(r'(?:^|[,;\s])03,1[,;\s]+(\d{2,3})(?:$|[,;\s])').firstMatch(text);
+    final heartMatch = RegExp(r'(?:^|[,;\s])03,1[,;\s]+(\d{2,3})(?:$|[,;\s])')
+        .firstMatch(text);
     if (heartMatch != null) {
       final bpm = int.tryParse(heartMatch.group(1) ?? '');
       if (bpm != null) {
@@ -421,11 +452,16 @@ class WatchBleService {
       }
     }
 
-    final bpMatch = RegExp(r'(?:^|[,;\s])04,1[,;\s]+(\d{2,3})[,;\s]+(\d{2,3})(?:$|[,;\s])').firstMatch(text);
+    final bpMatch =
+        RegExp(r'(?:^|[,;\s])04,1[,;\s]+(\d{2,3})[,;\s]+(\d{2,3})(?:$|[,;\s])')
+            .firstMatch(text);
     if (bpMatch != null) {
       final sys = int.tryParse(bpMatch.group(1) ?? '');
       final dia = int.tryParse(bpMatch.group(2) ?? '');
-      if (sys != null && dia != null && sys.inRange(50, 280) && dia.inRange(30, 180)) {
+      if (sys != null &&
+          dia != null &&
+          sys.inRange(50, 280) &&
+          dia.inRange(30, 180)) {
         telemetry.systolicBp = sys;
         telemetry.diastolicBp = dia;
         telemetry.hasBloodPressureData = true;
@@ -434,7 +470,8 @@ class WatchBleService {
       }
     }
 
-    final tempMatch = RegExp(r'(?:^|[,;\s])11,1[,;\s]+(-?\d{1,2}(?:\.\d+)?)').firstMatch(text);
+    final tempMatch = RegExp(r'(?:^|[,;\s])11,1[,;\s]+(-?\d{1,2}(?:\.\d+)?)')
+        .firstMatch(text);
     if (tempMatch != null) {
       final temperature = double.tryParse(tempMatch.group(1) ?? '');
       if (temperature != null && temperature >= 20 && temperature <= 50) {
@@ -445,7 +482,9 @@ class WatchBleService {
       }
     }
 
-    final oxygenMatch = RegExp(r'(?:spo2|sp\s*o2|oxygen)[^0-9]{0,10}(\d{2,3})', caseSensitive: false).firstMatch(text);
+    final oxygenMatch = RegExp(r'(?:spo2|sp\s*o2|oxygen)[^0-9]{0,10}(\d{2,3})',
+            caseSensitive: false)
+        .firstMatch(text);
     if (oxygenMatch != null) {
       final oxygen = int.tryParse(oxygenMatch.group(1) ?? '');
       if (oxygen != null && oxygen >= 50 && oxygen <= 100) {
@@ -462,13 +501,14 @@ class WatchBleService {
     }
   }
 
-
   void _recordHeartRate(int bpm) {
     if (bpm < 30 || bpm > 220) return;
     telemetry.heartRate = bpm;
     telemetry.hasHeartRateData = true;
     final time = DateTime.now().toIso8601String().substring(11, 16);
-    if (telemetry.hrHistory.isEmpty || telemetry.hrHistory.first.bpm != bpm || telemetry.hrHistory.first.time != time) {
+    if (telemetry.hrHistory.isEmpty ||
+        telemetry.hrHistory.first.bpm != bpm ||
+        telemetry.hrHistory.first.time != time) {
       telemetry.hrHistory.insert(0, HeartRateRecord(bpm: bpm, time: time));
       if (telemetry.hrHistory.length > 50) telemetry.hrHistory.removeLast();
     }
@@ -518,12 +558,16 @@ class WatchBleService {
     if (mantissa >= 0x0800) mantissa -= 0x1000;
     if (exponent >= 0x08) exponent -= 0x10;
     // Reserved/NaN SFLOAT special values are not health measurements.
-    if (mantissa == -2048 || mantissa == -2047 || mantissa == -2046 || mantissa == -2045) return null;
+    if (mantissa == -2048 ||
+        mantissa == -2047 ||
+        mantissa == -2046 ||
+        mantissa == -2045) return null;
     return mantissa * math.pow(10, exponent).toDouble();
   }
 
   Future<bool> _sendCommand(MtkCommand command) async {
-    return _writePackets(<List<int>>[command.frame, if (command.data.isNotEmpty) command.data]);
+    return _writePackets(
+        <List<int>>[command.frame, if (command.data.isNotEmpty) command.data]);
   }
 
   Future<bool> _sendWwCommand(String body) async {
@@ -552,7 +596,8 @@ class WatchBleService {
         for (var i = 0; i < packet.length; i += chunkSize) {
           if (!isConnected || writeChar == null) return false;
           final end = math.min(i + chunkSize, packet.length).toInt();
-          await writeChar!.write(packet.sublist(i, end), withoutResponse: false);
+          await writeChar!
+              .write(packet.sublist(i, end), withoutResponse: false);
           if (i + chunkSize < packet.length) {
             await Future<void>.delayed(const Duration(milliseconds: 12));
           }
@@ -570,7 +615,8 @@ class WatchBleService {
   void triggerFindPhoneAlarm() {
     if (isPhoneRinging) return;
     isPhoneRinging = true;
-    unawaited(_phoneChannel.invokeMethod<void>('startAlarm').catchError((Object e) {
+    unawaited(
+        _phoneChannel.invokeMethod<void>('startAlarm').catchError((Object e) {
       log('Phone ring could not start: $e');
     }));
     onFindPhoneTriggered?.call();
@@ -580,7 +626,8 @@ class WatchBleService {
 
   void stopFindPhoneAlarm() {
     isPhoneRinging = false;
-    unawaited(_phoneChannel.invokeMethod<void>('stopAlarm').catchError((Object e) {
+    unawaited(
+        _phoneChannel.invokeMethod<void>('stopAlarm').catchError((Object e) {
       log('Phone ring stop failed: $e');
     }));
     unawaited(_sendWwCommand('10,4,0'));
@@ -590,7 +637,8 @@ class WatchBleService {
   Future<void> autoSyncTime12Hour() async {
     telemetry.is12Hour = true;
     try {
-      await _ctsChannel.invokeMethod<bool>('setTimeFormat', <String, Object>{'is12Hour': true});
+      await _ctsChannel.invokeMethod<bool>(
+          'setTimeFormat', <String, Object>{'is12Hour': true});
       await _ctsChannel.invokeMethod<bool>('broadcastCtsTime');
     } catch (e) {
       log('Phone-side time GATT profile update failed: $e');
@@ -606,7 +654,8 @@ class WatchBleService {
   Future<void> setTimeFormat({required bool is12Hour}) async {
     telemetry.is12Hour = is12Hour;
     try {
-      await _ctsChannel.invokeMethod<bool>('setTimeFormat', <String, Object>{'is12Hour': is12Hour});
+      await _ctsChannel.invokeMethod<bool>(
+          'setTimeFormat', <String, Object>{'is12Hour': is12Hour});
       await _ctsChannel.invokeMethod<bool>('broadcastCtsTime');
     } catch (e) {
       log('Could not update the phone-side time format profile: $e');
@@ -687,11 +736,15 @@ class WatchBleService {
       return;
     }
     final ok = await _sendWwCommand('03,1');
-    log(ok ? 'Heart-rate measurement requested; waiting for actual response.' : 'Heart-rate request failed.');
+    log(ok
+        ? 'Heart-rate measurement requested; waiting for actual response.'
+        : 'Heart-rate request failed.');
   }
 
   Future<void> saveAlarm(WatchAlarm alarm) async {
-    if (!telemetry.alarms.any((item) => identical(item, alarm))) telemetry.alarms.add(alarm);
+    if (!telemetry.alarms.any((item) => identical(item, alarm))) {
+      telemetry.alarms.add(alarm);
+    }
     // The exact watch-alarm serialization path was not present in the exported
     // class excerpts. Never send invented SET,ALARM packets to firmware.
     log('Alarm held in memory for this app session only. Nothing was written to the watch; its alarm packet format is not yet verified.');
@@ -722,7 +775,6 @@ class WatchBleService {
     }
   }
 
-
   String _notificationAppName(String packageName) {
     const names = <String, String>{
       'com.whatsapp': 'WhatsApp',
@@ -736,7 +788,8 @@ class WatchBleService {
     return names[packageName] ?? 'Phone notification';
   }
 
-  Future<void> pushNotification(String title, String body, {String appId = 'com.example.ht99_companion'}) async {
+  Future<void> pushNotification(String title, String body,
+      {String appId = 'com.example.ht99_companion'}) async {
     if (!isConnected || !isProtocolReady) {
       log('Notification skipped: the MediaTek protocol handshake is not ready.');
       return;
@@ -745,7 +798,7 @@ class WatchBleService {
       final command = await MtkProtocol.notification(
         title: title,
         body: body,
-        appName: appId,
+        appName: _notificationAppName(appId),
         appId: appId,
       );
       final ok = await _sendCommand(command);
@@ -757,7 +810,10 @@ class WatchBleService {
     }
   }
 
-  Future<bool> syncWeather({String city = 'Karachi', double latitude = 24.8607, double longitude = 67.0011}) async {
+  Future<bool> syncWeather(
+      {String city = 'Karachi',
+      double latitude = 24.8607,
+      double longitude = 67.0011}) async {
     if (!isConnected || !isProtocolReady) {
       log('Weather sync skipped: the MediaTek protocol handshake is not ready.');
       return false;
@@ -766,7 +822,8 @@ class WatchBleService {
     try {
       log('Fetching current weather for $city from Open-Meteo.');
       client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
-      final uri = Uri.https('api.open-meteo.com', '/v1/forecast', <String, String>{
+      final uri =
+          Uri.https('api.open-meteo.com', '/v1/forecast', <String, String>{
         'latitude': latitude.toString(),
         'longitude': longitude.toString(),
         'current': 'temperature_2m,weather_code',
@@ -774,13 +831,18 @@ class WatchBleService {
         'timezone': 'auto',
         'forecast_days': '1',
       });
-      final request = await client.getUrl(uri).timeout(const Duration(seconds: 12));
-      final response = await request.close().timeout(const Duration(seconds: 12));
+      final request =
+          await client.getUrl(uri).timeout(const Duration(seconds: 12));
+      final response =
+          await request.close().timeout(const Duration(seconds: 12));
       if (response.statusCode != HttpStatus.ok) {
         log('Weather service returned HTTP ${response.statusCode}.');
         return false;
       }
-      final jsonText = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 12));
+      final jsonText = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(const Duration(seconds: 12));
       final decoded = jsonDecode(jsonText) as Map<String, dynamic>;
       final current = decoded['current'] as Map<String, dynamic>?;
       final daily = decoded['daily'] as Map<String, dynamic>?;
@@ -825,7 +887,8 @@ class WatchBleService {
     return 'Cloudy';
   }
 
-  Future<void> pushWeather(int tempC, int conditionCode, int highC, int lowC) async {
+  Future<void> pushWeather(
+      int tempC, int conditionCode, int highC, int lowC) async {
     if (!isConnected || !isProtocolReady) return;
     try {
       final command = await MtkProtocol.weather(
@@ -836,7 +899,9 @@ class WatchBleService {
         lowC: lowC,
       );
       final ok = await _sendCommand(command);
-      log(ok ? 'Weather command written; confirm on watch.' : 'Weather command write failed.');
+      log(ok
+          ? 'Weather command written; confirm on watch.'
+          : 'Weather command write failed.');
     } catch (e) {
       log('Weather packet failed: $e');
     }
@@ -846,10 +911,14 @@ class WatchBleService {
 
   Future<void> disconnect() async {
     await stopScan();
-    try { await _connectionSub?.cancel(); } catch (_) {}
+    try {
+      await _connectionSub?.cancel();
+    } catch (_) {}
     _connectionSub = null;
     for (final subscription in _notifySubs) {
-      try { await subscription.cancel(); } catch (_) {}
+      try {
+        await subscription.cancel();
+      } catch (_) {}
     }
     _notifySubs.clear();
     final current = device;
@@ -857,9 +926,13 @@ class WatchBleService {
     isConnecting = false;
     isProtocolReady = false;
     _versionCompleter = null;
-    try { await current?.disconnect(); } catch (_) {}
+    try {
+      await current?.disconnect();
+    } catch (_) {}
     await _clearConnectionReferences();
-    try { await _ctsChannel.invokeMethod<void>('stopCtsServer'); } catch (_) {}
+    try {
+      await _ctsChannel.invokeMethod<void>('stopCtsServer');
+    } catch (_) {}
     log('Watch disconnected.');
     onStatus?.call('Disconnected');
     onData?.call();
@@ -878,10 +951,14 @@ class WatchBleService {
 
   Future<void> _clearConnectionReferences() async {
     for (final subscription in _notifySubs) {
-      try { await subscription.cancel(); } catch (_) {}
+      try {
+        await subscription.cancel();
+      } catch (_) {}
     }
     _notifySubs.clear();
-    try { await _connectionSub?.cancel(); } catch (_) {}
+    try {
+      await _connectionSub?.cancel();
+    } catch (_) {}
     _connectionSub = null;
     device = null;
     writeChar = null;
