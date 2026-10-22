@@ -1,16 +1,14 @@
 class HeartRateRecord {
   final int bpm;
   final String time;
-
   HeartRateRecord({required this.bpm, required this.time});
 }
 
 class WatchAlarm {
   int hour;
   int minute;
-  List<bool> days; // Sunday to Saturday
+  List<bool> days; // Sunday through Saturday.
   bool isEnabled;
-
   WatchAlarm({
     required this.hour,
     required this.minute,
@@ -24,16 +22,26 @@ class TelemetryModel {
   int calories;
   double distanceKm;
   int heartRate;
-  int batteryLevel; // -1 represents loading state to prevent the initial 25% bug
+  int batteryLevel;
   int systolicBp;
   int diastolicBp;
   double bodyTemp;
   int immunity;
   double sleepHours;
   bool is12Hour;
+  int bloodOxygen;
 
-  final List<HeartRateRecord> hrHistory = [];
-  final List<WatchAlarm> alarms = [];
+  // Explicit validity flags stop placeholder defaults from looking like sensor data.
+  bool hasStepData;
+  bool hasCaloriesData;
+  bool hasHeartRateData;
+  bool hasBatteryData;
+  bool hasBloodPressureData;
+  bool hasTemperatureData;
+  bool hasBloodOxygenData;
+
+  final List<HeartRateRecord> hrHistory = <HeartRateRecord>[];
+  final List<WatchAlarm> alarms = <WatchAlarm>[];
   int drinkWaterIntervalMinutes = 60;
   bool isDrinkWaterEnabled = false;
 
@@ -49,5 +57,13 @@ class TelemetryModel {
     this.immunity = 0,
     this.sleepHours = 0.0,
     this.is12Hour = true,
+    this.bloodOxygen = -1,
+    this.hasStepData = false,
+    this.hasCaloriesData = false,
+    this.hasHeartRateData = false,
+    this.hasBatteryData = false,
+    this.hasBloodPressureData = false,
+    this.hasTemperatureData = false,
+    this.hasBloodOxygenData = false,
   });
 }

@@ -1,4 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
@@ -10,7 +11,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:label="Apple"
+        android:label="HT99 Companion"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:theme="@style/LaunchTheme">
@@ -34,7 +35,7 @@
 
         <service
             android:name=".Ht99NotificationListener"
-            android:label="Apple Notification Service"
+            android:label="HT99 Notification Service"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>

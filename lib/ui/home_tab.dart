@@ -57,7 +57,7 @@ class HomeTab extends StatelessWidget {
                   ),
                   Column(
                     children: [
-                      Text("${ble.telemetry.steps}",
+                      Text(ble.telemetry.hasStepData ? "${ble.telemetry.steps}" : "--",
                           style: const TextStyle(
                               fontSize: 36, fontWeight: FontWeight.bold)),
                       Text("goal: $stepGoal",
@@ -72,8 +72,8 @@ class HomeTab extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _stat("${(progress * 100).toInt()}%", "Percent"),
-                  _stat("${ble.telemetry.calories}", "kcal"),
-                  Text(ble.telemetry.steps.toString(),
+                  _stat(ble.telemetry.hasCaloriesData ? "${ble.telemetry.calories}" : "--", "kcal"),
+                  Text(ble.telemetry.hasStepData ? ble.telemetry.steps.toString() : "--",
                       style: const TextStyle(
                           fontSize: 36, fontWeight: FontWeight.bold)),
                 ],
@@ -159,6 +159,16 @@ class HomeTab extends StatelessWidget {
                   MaterialPageRoute(
                       builder: (_) =>
                           HealthDetailScreen(type: "Thermometer", ble: ble))),
+            ),
+            _card(
+              context,
+              icon: Icons.air_rounded,
+              color: Colors.lightBlueAccent,
+              title: "SpO₂",
+              value: ble.telemetry.hasBloodOxygenData && ble.telemetry.bloodOxygen >= 0
+                  ? "${ble.telemetry.bloodOxygen} %"
+                  : "-- %",
+              onTap: null,
             ),
             _card(
               context,

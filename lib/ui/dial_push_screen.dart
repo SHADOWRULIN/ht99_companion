@@ -46,6 +46,10 @@ class _DialPushScreenState extends State<DialPushScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Watch face installed successfully!")),
       );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Dial file validated, but the verified WWfit FOTA transfer is not yet implemented. No data was sent to the watch.")),
+      );
     }
   }
 

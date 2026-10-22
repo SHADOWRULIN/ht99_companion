@@ -39,14 +39,14 @@ class DeviceTab extends StatelessWidget {
                 radius: 26,
                 backgroundColor: const Color(0xFFF5BE53).withOpacity(0.15),
                 child:
-                    const Icon(Icons.apple, color: Color(0xFFF5BE53), size: 30),
+                    const Icon(Icons.watch_rounded, color: Color(0xFFF5BE53), size: 30),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Apple Watch HT99",
+                    const Text("HT99 Smartwatch",
                         style: TextStyle(
                             color: Colors.white,
                             fontSize: 17,
@@ -71,6 +71,25 @@ class DeviceTab extends StatelessWidget {
                 child: Text(connected ? "Disconnect" : "Connect"),
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: ListTile(
+            leading: const Icon(Icons.cloud_sync_rounded, color: Color(0xFFF5BE53)),
+            title: const Text("Sync weather"),
+            subtitle: const Text("Current conditions and today's high/low for Karachi"),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: connected ? () async {
+              final sent = await ble.syncWeather();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(sent
+                    ? "Weather command sent. Check the watch display."
+                    : "Weather sync failed. Open Terminal for the reason.")),
+              );
+            } : null,
           ),
         ),
         const SizedBox(height: 16),
