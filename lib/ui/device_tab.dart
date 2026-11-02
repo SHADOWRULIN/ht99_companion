@@ -4,6 +4,7 @@ import 'message_push_screen.dart';
 import 'dial_push_screen.dart';
 import 'alarm_setting_screen.dart';
 import 'drink_water_screen.dart';
+import 'sync_settings_screen.dart';
 
 class DeviceTab extends StatelessWidget {
   final WatchBleService ble;
@@ -12,12 +13,58 @@ class DeviceTab extends StatelessWidget {
   const DeviceTab(
       {super.key, required this.ble, required this.onConnectTrigger});
 
+  void _showTestNotifDialog(BuildContext context) {
+    final titleCtrl = TextEditingController(text: "WhatsApp");
+    final bodyCtrl =
+        TextEditingController(text: "Hello from Apple Watch Companion!");
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Send Test Notification"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              decoration: const InputDecoration(labelText: "Title / Sender"),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: bodyCtrl,
+              decoration: const InputDecoration(labelText: "Message Content"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              ble.pushNotification(titleCtrl.text, bodyCtrl.text);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content: Text("Test notification sent to watch!")),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF5BE53),
+              foregroundColor: Colors.black,
+            ),
+            child: const Text("Send"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     bool connected = ble.isConnected;
     String batteryText = ble.telemetry.batteryLevel >= 0
         ? "(${ble.telemetry.batteryLevel}%)"
-        : "(Loading...)";
+        : "(Syncing...)";
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -31,26 +78,31 @@ class DeviceTab extends StatelessWidget {
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFF5BE53).withOpacity(0.3)),
+            border: Border.all(
+                color: const Color(0xFFF5BE53).withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
               CircleAvatar(
                 radius: 26,
-                backgroundColor: const Color(0xFFF5BE53).withOpacity(0.15),
+                backgroundColor:
+                    const Color(0xFFF5BE53).withValues(alpha: 0.15),
                 child:
-                    const Icon(Icons.watch_rounded, color: Color(0xFFF5BE53), size: 30),
+                    const Icon(Icons.apple, color: Color(0xFFF5BE53), size: 30),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("HT99 Smartwatch",
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold)),
+                    const Text(
+                      "Apple Watch HT99",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     Text(
                       connected ? "Connected $batteryText" : "Disconnected",
                       style: const TextStyle(
@@ -73,25 +125,6 @@ class DeviceTab extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          child: ListTile(
-            leading: const Icon(Icons.cloud_sync_rounded, color: Color(0xFFF5BE53)),
-            title: const Text("Sync weather"),
-            subtitle: const Text("Current conditions and today's high/low for Karachi"),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: connected ? () async {
-              final sent = await ble.syncWeather();
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(sent
-                    ? "Weather command sent. Check the watch display."
-                    : "Weather sync failed. Open Terminal for the reason.")),
-              );
-            } : null,
-          ),
-        ),
         const SizedBox(height: 16),
         Card(
           shape:
@@ -100,13 +133,34 @@ class DeviceTab extends StatelessWidget {
             children: [
               _tile(
                 context,
+                icon: Icons.tune_rounded,
+                color: const Color(0xFFF5BE53),
+                title: "Sync, Time Format & Weather",
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => SyncSettingsScreen(ble: ble)),
+                ),
+              ),
+              const Divider(height: 1, indent: 64),
+              _tile(
+                context,
                 icon: Icons.notifications_active_rounded,
                 color: Colors.amber,
                 title: "Message push",
                 onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => MessagePushScreen(ble: ble))),
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => MessagePushScreen(ble: ble)),
+                ),
+              ),
+              const Divider(height: 1, indent: 64),
+              _tile(
+                context,
+                icon: Icons.send_to_mobile_rounded,
+                color: Colors.tealAccent,
+                title: "Send test notification",
+                onTap: connected ? () => _showTestNotifDialog(context) : null,
               ),
               const Divider(height: 1, indent: 64),
               _tile(
@@ -115,9 +169,10 @@ class DeviceTab extends StatelessWidget {
                 color: Colors.deepOrange,
                 title: "Alarm setting",
                 onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => AlarmSettingScreen(ble: ble))),
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => AlarmSettingScreen(ble: ble)),
+                ),
               ),
               const Divider(height: 1, indent: 64),
               _tile(
@@ -142,9 +197,9 @@ class DeviceTab extends StatelessWidget {
                 color: Colors.purpleAccent,
                 title: "Dial push",
                 onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => DialPushScreen(ble: ble))),
+                  context,
+                  MaterialPageRoute(builder: (_) => DialPushScreen(ble: ble)),
+                ),
               ),
               const Divider(height: 1, indent: 64),
               _tile(
@@ -153,9 +208,9 @@ class DeviceTab extends StatelessWidget {
                 color: Colors.blueAccent,
                 title: "Reminder to drink water",
                 onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => DrinkWaterScreen(ble: ble))),
+                  context,
+                  MaterialPageRoute(builder: (_) => DrinkWaterScreen(ble: ble)),
+                ),
               ),
             ],
           ),
@@ -164,15 +219,18 @@ class DeviceTab extends StatelessWidget {
     );
   }
 
-  Widget _tile(BuildContext ctx,
-      {required IconData icon,
-      required Color color,
-      required String title,
-      VoidCallback? onTap}) {
+  Widget _tile(
+    BuildContext ctx, {
+    required IconData icon,
+    required Color color,
+    required String title,
+    VoidCallback? onTap,
+  }) {
     return ListTile(
       leading: CircleAvatar(
-          backgroundColor: color.withOpacity(0.15),
-          child: Icon(icon, color: color)),
+        backgroundColor: color.withValues(alpha: 0.15),
+        child: Icon(icon, color: color),
+      ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
       trailing: const Icon(Icons.arrow_forward_ios_rounded,
           size: 14, color: Colors.grey),

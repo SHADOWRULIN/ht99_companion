@@ -18,8 +18,10 @@ class HomeTab extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("Home",
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+            const Text(
+              "Home",
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+            ),
             IconButton(
               icon: const Icon(Icons.refresh_rounded, color: Color(0xFFF5BE53)),
               onPressed:
@@ -38,8 +40,10 @@ class HomeTab extends StatelessWidget {
           ),
           child: Column(
             children: [
-              const Text("today's steps",
-                  style: TextStyle(fontSize: 14, color: Colors.grey)),
+              const Text(
+                "today's steps",
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
               const SizedBox(height: 16),
               Stack(
                 alignment: Alignment.center,
@@ -57,12 +61,18 @@ class HomeTab extends StatelessWidget {
                   ),
                   Column(
                     children: [
-                      Text(ble.telemetry.hasStepData ? "${ble.telemetry.steps}" : "--",
-                          style: const TextStyle(
-                              fontSize: 36, fontWeight: FontWeight.bold)),
-                      Text("goal: $stepGoal",
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.grey)),
+                      Text(
+                        ble.telemetry.steps.toString(),
+                        style: const TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        "goal: $stepGoal",
+                        style:
+                            const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
                     ],
                   ),
                 ],
@@ -72,10 +82,8 @@ class HomeTab extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _stat("${(progress * 100).toInt()}%", "Percent"),
-                  _stat(ble.telemetry.hasCaloriesData ? "${ble.telemetry.calories}" : "--", "kcal"),
-                  Text(ble.telemetry.hasStepData ? ble.telemetry.steps.toString() : "--",
-                      style: const TextStyle(
-                          fontSize: 36, fontWeight: FontWeight.bold)),
+                  _stat(ble.telemetry.calories.toString(), "kcal"),
+                  _stat(ble.telemetry.distanceKm.toStringAsFixed(2), "km"),
                 ],
               ),
             ],
@@ -96,13 +104,14 @@ class HomeTab extends StatelessWidget {
               color: Colors.indigoAccent,
               title: "Sleep",
               value: ble.telemetry.sleepHours > 0
-                  ? "${ble.telemetry.sleepHours} h"
+                  ? "${ble.telemetry.sleepHours.toStringAsFixed(1)} h"
                   : "--",
               onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) =>
-                          HealthDetailScreen(type: "Sleep", ble: ble))),
+                context,
+                MaterialPageRoute(
+                  builder: (_) => HealthDetailScreen(type: "Sleep", ble: ble),
+                ),
+              ),
             ),
             _card(
               context,
@@ -113,10 +122,12 @@ class HomeTab extends StatelessWidget {
                   ? "${ble.telemetry.heartRate} bpm"
                   : "-- times/minute",
               onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) =>
-                          HealthDetailScreen(type: "HeartRate", ble: ble))),
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      HealthDetailScreen(type: "HeartRate", ble: ble),
+                ),
+              ),
             ),
             _card(
               context,
@@ -127,10 +138,11 @@ class HomeTab extends StatelessWidget {
                   ? "${ble.telemetry.systolicBp}/${ble.telemetry.diastolicBp} mmHg"
                   : "-- mmHg",
               onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) =>
-                          HealthDetailScreen(type: "BP", ble: ble))),
+                context,
+                MaterialPageRoute(
+                  builder: (_) => HealthDetailScreen(type: "BP", ble: ble),
+                ),
+              ),
             ),
             _card(
               context,
@@ -141,10 +153,12 @@ class HomeTab extends StatelessWidget {
                   ? "${ble.telemetry.immunity} %"
                   : "-- %",
               onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) =>
-                          HealthDetailScreen(type: "Immunity", ble: ble))),
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      HealthDetailScreen(type: "Immunity", ble: ble),
+                ),
+              ),
             ),
             _card(
               context,
@@ -152,23 +166,15 @@ class HomeTab extends StatelessWidget {
               color: Colors.tealAccent,
               title: "Thermometer",
               value: ble.telemetry.bodyTemp > 0
-                  ? "${ble.telemetry.bodyTemp} °C"
+                  ? "${ble.telemetry.bodyTemp.toStringAsFixed(1)} °C"
                   : "-- °C",
               onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) =>
-                          HealthDetailScreen(type: "Thermometer", ble: ble))),
-            ),
-            _card(
-              context,
-              icon: Icons.air_rounded,
-              color: Colors.lightBlueAccent,
-              title: "SpO₂",
-              value: ble.telemetry.hasBloodOxygenData && ble.telemetry.bloodOxygen >= 0
-                  ? "${ble.telemetry.bloodOxygen} %"
-                  : "-- %",
-              onTap: null,
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      HealthDetailScreen(type: "Thermometer", ble: ble),
+                ),
+              ),
             ),
             _card(
               context,
@@ -186,18 +192,23 @@ class HomeTab extends StatelessWidget {
     );
   }
 
-  Widget _stat(String v, String l) => Column(children: [
-        Text(v,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        Text(l, style: const TextStyle(fontSize: 11, color: Colors.grey))
-      ]);
+  Widget _stat(String v, String l) => Column(
+        children: [
+          Text(v,
+              style:
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(l, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        ],
+      );
 
-  Widget _card(BuildContext ctx,
-      {required IconData icon,
-      required Color color,
-      required String title,
-      required String value,
-      VoidCallback? onTap}) {
+  Widget _card(
+    BuildContext ctx, {
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String value,
+    VoidCallback? onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
@@ -216,10 +227,11 @@ class HomeTab extends StatelessWidget {
             Text(title,
                 style: const TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 2),
-            Text(value,
-                style:
-                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                overflow: TextOverflow.ellipsis),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),

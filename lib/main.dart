@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'services/watch_ble_service.dart';
@@ -7,6 +8,7 @@ import 'ui/my_tab.dart';
 import 'ui/terminal_tab.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const AppleWatchManagerApp());
 }
 
@@ -38,10 +40,12 @@ class _AppleWatchManagerAppState extends State<AppleWatchManagerApp> {
   @override
   void initState() {
     super.initState();
-    _ble.onData = () => setState(() {});
+    _ble.onData = () {
+      if (mounted) setState(() {});
+    };
 
     FlutterBluePlus.adapterState.listen((state) {
-      setState(() => _adapterState = state);
+      if (mounted) setState(() => _adapterState = state);
     });
 
     _ble.onFindPhoneTriggered = () {
@@ -100,8 +104,11 @@ class _AppleWatchManagerAppState extends State<AppleWatchManagerApp> {
             SizedBox(height: 10),
             CircularProgressIndicator(color: EarthColors.ochreGold),
             SizedBox(height: 18),
-            Text("Establishing link with HT99...",
-                textAlign: TextAlign.center, style: TextStyle(fontSize: 13)),
+            Text(
+              "Establishing encrypted MTK link with HT99...",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13),
+            ),
           ],
         ),
         actionsAlignment: MainAxisAlignment.spaceAround,
@@ -109,7 +116,6 @@ class _AppleWatchManagerAppState extends State<AppleWatchManagerApp> {
           TextButton(
             onPressed: () {
               _ble.stopScan();
-              _ble.isConnecting = false;
               Navigator.pop(ctx);
             },
             child: const Text("Cancel"),
@@ -117,7 +123,6 @@ class _AppleWatchManagerAppState extends State<AppleWatchManagerApp> {
           ElevatedButton(
             onPressed: () {
               _ble.stopScan();
-              _ble.isConnecting = false;
               _ble.scanAndConnect();
             },
             style: ElevatedButton.styleFrom(
@@ -131,7 +136,9 @@ class _AppleWatchManagerAppState extends State<AppleWatchManagerApp> {
     );
 
     _ble.onConnected = () {
-      if (Navigator.canPop(context)) Navigator.pop(context);
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
     };
   }
 
@@ -175,77 +182,178 @@ class _AppleWatchManagerAppState extends State<AppleWatchManagerApp> {
         ),
         useMaterial3: true,
       ),
-      home: Scaffold(
-        body: SafeArea(
-          child: Column(
-            children: [
-              if (_adapterState != BluetoothAdapterState.on &&
-                  _adapterState != BluetoothAdapterState.unknown)
-                Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.redAccent.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(14),
-                    border:
-                        Border.all(color: Colors.redAccent.withOpacity(0.4)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.bluetooth_disabled,
-                          color: Colors.redAccent),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text("Bluetooth is turned off.",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 13)),
+      home: _SplashGate(
+        child: Scaffold(
+          body: SafeArea(
+            child: Column(
+              children: [
+                if (_adapterState != BluetoothAdapterState.on &&
+                    _adapterState != BluetoothAdapterState.unknown)
+                  Container(
+                    margin: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.redAccent.withValues(alpha: 0.4),
                       ),
-                      ElevatedButton(
-                        onPressed: () => FlutterBluePlus.turnOn(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                          foregroundColor: Colors.white,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.bluetooth_disabled,
+                            color: Colors.redAccent),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            "Bluetooth is turned off.",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
                         ),
-                        child: const Text("Turn On"),
+                        ElevatedButton(
+                          onPressed: () => FlutterBluePlus.turnOn(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.redAccent,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text("Turn On"),
+                        ),
+                      ],
+                    ),
+                  ),
+                Expanded(
+                  child: IndexedStack(
+                    index: _currentIndex,
+                    children: [
+                      HomeTab(ble: _ble, stepGoal: _stepGoal),
+                      DeviceTab(ble: _ble, onConnectTrigger: _showScanModal),
+                      MyTab(
+                        currentTheme: _themeMode,
+                        onThemeChange: (m) => setState(() => _themeMode = m),
+                        stepGoal: _stepGoal,
+                        onGoalChange: (g) {
+                          setState(() => _stepGoal = g);
+                          _ble.syncUserInfo(goal: g);
+                        },
+                      ),
+                      TerminalTab(ble: _ble),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: _currentIndex,
+            onDestinationSelected: (i) => setState(() => _currentIndex = i),
+            indicatorColor: EarthColors.ochreGold.withValues(alpha: 0.25),
+            destinations: const [
+              NavigationDestination(
+                  icon: Icon(Icons.home_rounded), label: "Home"),
+              NavigationDestination(
+                  icon: Icon(Icons.watch_rounded), label: "Device"),
+              NavigationDestination(
+                  icon: Icon(Icons.person_rounded), label: "My"),
+              NavigationDestination(
+                  icon: Icon(Icons.terminal_rounded), label: "Terminal"),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SplashGate extends StatefulWidget {
+  final Widget child;
+  const _SplashGate({required this.child});
+
+  @override
+  State<_SplashGate> createState() => _SplashGateState();
+}
+
+class _SplashGateState extends State<_SplashGate>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+  bool _done = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
+    _scale = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack);
+
+    Timer(const Duration(milliseconds: 1700), () {
+      if (mounted) setState(() => _done = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 450),
+      child: _done
+          ? widget.child
+          : Scaffold(
+              key: const ValueKey("splash"),
+              backgroundColor: EarthColors.darkCharcoal,
+              body: Center(
+                child: ScaleTransition(
+                  scale: _scale,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 96,
+                        height: 96,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: EarthColors.ochreGold.withValues(alpha: 0.15),
+                          border: Border.all(
+                            color: EarthColors.ochreGold,
+                            width: 2,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.apple,
+                          color: EarthColors.ochreGold,
+                          size: 54,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const Text(
+                        "Apple Watch HT99",
+                        style: TextStyle(
+                          color: EarthColors.softCream,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        "Standalone Companion",
+                        style: TextStyle(
+                          color: EarthColors.mutedSage,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              Expanded(
-                child: IndexedStack(
-                  index: _currentIndex,
-                  children: [
-                    HomeTab(ble: _ble, stepGoal: _stepGoal),
-                    DeviceTab(ble: _ble, onConnectTrigger: _showScanModal),
-                    MyTab(
-                      currentTheme: _themeMode,
-                      onThemeChange: (m) => setState(() => _themeMode = m),
-                      stepGoal: _stepGoal,
-                      onGoalChange: (g) => setState(() => _stepGoal = g),
-                    ),
-                    TerminalTab(ble: _ble),
-                  ],
-                ),
               ),
-            ],
-          ),
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (i) => setState(() => _currentIndex = i),
-          indicatorColor: EarthColors.ochreGold.withOpacity(0.25),
-          destinations: const [
-            NavigationDestination(
-                icon: Icon(Icons.home_rounded), label: "Home"),
-            NavigationDestination(
-                icon: Icon(Icons.watch_rounded), label: "Device"),
-            NavigationDestination(
-                icon: Icon(Icons.person_rounded), label: "My"),
-            NavigationDestination(
-                icon: Icon(Icons.terminal_rounded), label: "Terminal"),
-          ],
-        ),
-      ),
+            ),
     );
   }
 }

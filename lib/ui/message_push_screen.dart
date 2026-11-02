@@ -17,20 +17,24 @@ class _MessagePushScreenState extends State<MessagePushScreen>
   static const MethodChannel _phoneChannel =
       MethodChannel("com.ht99.companion/phone");
 
-  final List<Map<String, String>> personalApps = [
+  final List personalApps = [
     {"name": "WhatsApp", "pkg": "com.whatsapp"},
+    {"name": "WhatsApp Business", "pkg": "com.whatsapp.w4b"},
     {"name": "Instagram", "pkg": "com.instagram.android"},
     {"name": "Facebook", "pkg": "com.facebook.katana"},
+    {"name": "Messenger", "pkg": "com.facebook.orca"},
     {"name": "Twitter (X)", "pkg": "com.twitter.android"},
     {"name": "Telegram", "pkg": "org.telegram.messenger"},
     {"name": "Snapchat", "pkg": "com.snapchat.android"},
     {"name": "TikTok", "pkg": "com.zhiliaoapp.musically"},
+    {"name": "YouTube", "pkg": "com.google.android.youtube"},
     {"name": "Binance", "pkg": "com.binance.dev"},
   ];
 
-  final List<Map<String, String>> systemApps = [
+  final List systemApps = [
     {"name": "Phone / Call Reminder", "pkg": "com.android.server.telecom"},
     {"name": "SMS Messages", "pkg": "com.google.android.apps.messaging"},
+    {"name": "MIUI / Xiaomi SMS", "pkg": "com.android.mms"},
     {"name": "Gmail", "pkg": "com.google.android.gm"},
     {"name": "Calendar", "pkg": "com.google.android.calendar"},
   ];
@@ -42,6 +46,12 @@ class _MessagePushScreenState extends State<MessagePushScreen>
     _checkPermission();
   }
 
+  @override
+  void dispose() {
+    _tabCtrl.dispose();
+    super.dispose();
+  }
+
   void _checkPermission() async {
     bool enabled =
         await _phoneChannel.invokeMethod("isNotificationListenerEnabled") ??
@@ -50,19 +60,21 @@ class _MessagePushScreenState extends State<MessagePushScreen>
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text("Reminder"),
+          title: const Text("Notification Access Required"),
           content: const Text(
-              "It is necessary to open the auxiliary service function to prevent some mobile phones from receiving the message push."),
+            "Enable Notification Access for Apple so incoming WhatsApp, SMS, and Call alerts are forwarded to your HT99 watch.",
+          ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text("Cancel")),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Cancel"),
+            ),
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(ctx);
                 _phoneChannel.invokeMethod("openNotificationSettings");
               },
-              child: const Text("OK"),
+              child: const Text("Open Settings"),
             ),
           ],
         ),
@@ -94,19 +106,24 @@ class _MessagePushScreenState extends State<MessagePushScreen>
     );
   }
 
-  Widget _buildAppList(List<Map<String, String>> apps) {
+  Widget _buildAppList(List apps) {
     return ListView.separated(
       itemCount: apps.length,
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (ctx, i) {
-        String name = apps[i]["name"]!;
-        String pkg = apps[i]["pkg"]!;
-        bool isEnabled = widget.ble.enabledPackages.contains(pkg);
+        final Map item = apps[i] as Map;
+        final String name = item["name"].toString();
+        final String pkg = item["pkg"].toString();
+        final bool isEnabled = widget.ble.enabledPackages.contains(pkg);
 
         return SwitchListTile(
           title: Text(name),
+          subtitle: Text(
+            pkg,
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+          ),
           value: isEnabled,
-          activeColor: const Color(0xFFF5BE53),
+          activeThumbColor: const Color(0xFFF5BE53),
           onChanged: (val) {
             setState(() {
               if (val) {
@@ -115,6 +132,7 @@ class _MessagePushScreenState extends State<MessagePushScreen>
                 widget.ble.enabledPackages.remove(pkg);
               }
             });
+            widget.ble.syncAllowedPackages();
           },
         );
       },
